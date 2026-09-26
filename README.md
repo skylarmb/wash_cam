@@ -26,3 +26,20 @@ The CLI has no runtime dependencies. Setuptools builds the package.
 
 Each command package exposes its interface through `__init__.py`.
 The dummy command exposes `run()`. Register commands in `src/wash_cam/cli.py`.
+
+## Run unit tests
+
+`uv sync --locked` installs pytest as a development dependency. Run the full suite:
+
+```sh
+uv run --locked pytest
+```
+
+Run one test during development:
+
+```sh
+uv run --locked pytest tests/test_cli.py::test_dummy_command
+```
+
+Tests reside in `tests/` and import the installed package. They require no camera hardware or external services.
+Follow the red/green workflow in `AGENTS.md` for new behavior and bug fixes.

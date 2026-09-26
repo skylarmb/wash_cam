@@ -14,3 +14,12 @@ wash-cam = "wash_cam.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--import-mode=importlib"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
