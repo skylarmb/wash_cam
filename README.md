@@ -22,10 +22,42 @@ uv run wash-cam dummy
 ```
 
 The dummy command prints `Wash Cam is ready.` Use `uv run wash-cam --help` to list commands.
-The CLI has no runtime dependencies. Setuptools builds the package.
+The package uses OpenCV for image processing and PyYAML for configuration. Setuptools builds the package.
 
 Each command package exposes its interface through `__init__.py`.
 The dummy command exposes `run()`. Register commands in `src/wash_cam/cli.py`.
+
+## Configure local settings
+
+Copy the example file from the checkout root:
+
+```sh
+cp config.example.yaml config.yaml
+```
+
+Git ignores `config.yaml`. The example contains only `example: true`.
+Add machine settings to your local file as features require them.
+
+Modules read settings through the configuration loader:
+
+```python
+from wash_cam.config import load_config
+
+# Get the shared settings. The first call reads the file.
+config = load_config()
+example = config.example
+```
+
+The config module owns file resolution and reads only `config.yaml` at the source checkout root.
+`load_config()` accepts no arguments and works independently of the current directory.
+The first successful call creates an immutable `Config` object. Later calls return the same object without reading the file.
+Restart the program to load file changes. Failed loads can be retried after correcting the file.
+Imports do not read configuration, and the dummy command does not require it.
+
+The file must contain a YAML mapping with string keys and a required boolean `example` field.
+Modules access the typed field as `config.example`. Callers cannot change fields on the shared object.
+The loader raises `wash_cam.config.ConfigError` for missing, unreadable, or invalid files.
+Missing-file errors include the copy instruction. The loader does not supply defaults or merge the example file.
 
 ## Run unit tests
 
