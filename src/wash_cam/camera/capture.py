@@ -5,6 +5,8 @@ from pathlib import Path
 
 import cv2
 
+from wash_cam.config import CAMERA_CROP_BOX
+
 # Images are saved relative to the repository root, three levels above this file
 # (src/wash_cam/camera/capture.py -> repo root).
 IMAGES_DIR = Path(__file__).resolve().parents[3] / "tmp" / "images"
@@ -31,9 +33,12 @@ def take_picture(camera_index: int = 0) -> str:
             f"Could not read a frame from camera at index {camera_index}."
         )
 
+    left, top, right, bottom = CAMERA_CROP_BOX
+    cropped_frame = frame[top:bottom, left:right]
+
     IMAGES_DIR.mkdir(parents=True, exist_ok=True)
     # Microsecond precision avoids collisions between captures taken in the same second.
     filename = f"{datetime.now().astimezone().strftime('%Y%m%d_%H%M%S_%f')}.jpg"
-    cv2.imwrite(str(IMAGES_DIR / filename), frame)
+    cv2.imwrite(str(IMAGES_DIR / filename), cropped_frame)
 
     return filename
