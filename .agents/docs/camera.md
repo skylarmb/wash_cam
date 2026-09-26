@@ -4,6 +4,8 @@ The `wash_cam.camera` package exposes `take_picture(camera_index: int = 0) -> st
 
 `CAMERA_CROP_BOX` lives in `wash_cam/config.py` as a hardcoded `(left, top, right, bottom)` pixel box, tuned to isolate the wash bays from the Brio's fixed mount position and 1920x1080 capture resolution. Re-tune it there if the camera is repositioned or its resolution changes.
 
+`tests/test_camera.py` covers `take_picture()` and `run()` without real hardware by monkeypatching `cv2.VideoCapture` with a fake exposing `isOpened()`/`read()`/`release()`, and monkeypatching `capture.IMAGES_DIR` to pytest's `tmp_path`. A small numpy frame stands in for a real camera frame so the crop slicing itself is exercised, not just mocked away.
+
 It raises `RuntimeError` if the camera at `camera_index` cannot be opened or a frame cannot be read. On macOS, OpenCV requires camera access to be granted to the calling process under System Settings > Privacy & Security > Camera, or `isOpened()` fails.
 
 On the current dev machine, camera index `0` resolves to the Logitech Brio webcam, so it is used as the default. Index mapping is OS/device-dependent and not guaranteed to hold on other machines; callers can pass an explicit `camera_index` to override.

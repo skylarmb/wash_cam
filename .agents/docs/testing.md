@@ -1,6 +1,6 @@
 # Unit tests
 
-Pytest is a development dependency managed by uv. Run `uv sync --locked` to install dependencies and `uv run --locked pytest` to run the suite. Tests reside in `tests/` and import the installed package with pytest's importlib mode. They cover dummy output, CLI dispatch, help, and invalid commands without camera hardware or external services.
+Pytest is a development dependency managed by uv. Run `uv sync --locked` to install dependencies and `uv run --locked pytest` to run the suite. Tests reside in `tests/` and import the installed package with pytest's importlib mode. They cover dummy output, camera capture and CLI dispatch, help, and invalid commands without camera hardware or external services. Camera tests fake `cv2.VideoCapture` rather than touching real hardware; see `.agents/docs/camera.md`.
 
 For a focused check, run `uv run --locked pytest tests/test_cli.py::test_dummy_command`. Test functions use docstrings to describe their purpose. Built-in pytest fixtures supply command-line arguments and capture output.
 

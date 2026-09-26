@@ -23,5 +23,6 @@ addopts = ["--import-mode=importlib"]
 
 [dependency-groups]
 dev = [
+    "numpy>=2.2.6",
     "pytest>=9.1.1",
 ]
