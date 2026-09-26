@@ -27,6 +27,19 @@ The package uses OpenCV for image processing and PyYAML for configuration. Setup
 Each command package exposes its interface through `__init__.py`.
 The dummy command exposes `run()`. Register commands in `src/wash_cam/cli.py`.
 
+## Run the dashboard
+
+Start the dashboard in a separate terminal:
+
+```sh
+uv run wash-cam dashboard
+```
+
+Open http://127.0.0.1:8000 on this computer. The page shows the latest JPEG from the checkout's `tmp/images/` directory.
+It reloads every 30 seconds and selects the latest image by its timestamp filename.
+The same image stays visible until a newer capture appears. An empty or missing directory shows `No images yet`.
+The dashboard does not capture images. Press Ctrl+C to stop it.
+
 ## Configure local settings
 
 Copy the example file from the checkout root:

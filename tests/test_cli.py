@@ -37,6 +37,7 @@ def test_camera_command(monkeypatch, capsys):
         (["--help"], "dummy"),
         (["dummy", "--help"], "dummy"),
         (["camera", "--help"], "camera"),
+        (["dashboard", "--help"], "dashboard"),
     ],
 )
 def test_help_exits_successfully(arguments, expected, monkeypatch, capsys):

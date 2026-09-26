@@ -2,7 +2,7 @@
 
 import argparse
 
-from wash_cam import camera, dummy
+from wash_cam import camera, dashboard, dummy
 
 
 def main() -> None:
@@ -13,5 +13,7 @@ def main() -> None:
     command.set_defaults(run=dummy.run)
     command = commands.add_parser("camera", help="Capture one picture from the webcam.")
     command.set_defaults(run=camera.run)
+    command = commands.add_parser("dashboard", help="Show the latest captured image.")
+    command.set_defaults(run=dashboard.run)
     args = parser.parse_args()
     args.run()
