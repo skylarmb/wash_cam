@@ -7,7 +7,9 @@ name = "wash-cam"
 version = "0.1.0"
 description = "A CLI for car wash monitoring."
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "opencv-python>=5.0.0.93",
+]
 
 [project.scripts]
 wash-cam = "wash_cam.cli:main"

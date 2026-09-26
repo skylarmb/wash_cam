@@ -4,3 +4,4 @@ __pycache__/
 build/
 dist/
 .ruff_cache/
+tmp/
