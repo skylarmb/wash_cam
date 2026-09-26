@@ -167,3 +167,53 @@ def test_invalid_utf8_reports_path(config, config_path):
         config.load_config()
 
     assert str(config_path) in str(error.value)
+
+
+def test_calibration_is_absent_without_a_config_file(config):
+    """Report an uncalibrated camera rather than failing on a missing file."""
+    assert config.load_calibration() is None
+
+
+def test_calibration_is_absent_when_not_yet_written(config, config_path):
+    """Report an uncalibrated camera when the file holds no calibration."""
+    config_path.write_text("example: true\n", encoding="utf-8")
+
+    assert config.load_calibration() is None
+
+
+def test_saved_calibration_round_trips(config, config_path):
+    """Read back exactly what was stored."""
+    calibration = config.Calibration(
+        matrix=((1.0, 0.0, -12.0), (0.0, 1.0, 7.0)), reference_size=(1920, 1080)
+    )
+
+    config.save_calibration(calibration)
+
+    assert config_path.is_file()
+    assert config.load_calibration() == calibration
+
+
+def test_saving_calibration_keeps_other_settings(config, config_path):
+    """Leave unrelated settings in place when writing calibration."""
+    config_path.write_text("example: false\n", encoding="utf-8")
+
+    config.save_calibration(
+        config.Calibration(
+            matrix=((1.0, 0.0, 0.0), (0.0, 1.0, 0.0)), reference_size=(640, 480)
+        )
+    )
+
+    assert config.load_config().example is False
+
+
+def test_malformed_calibration_reports_path(config, config_path):
+    """Reject a calibration matrix that is not two rows of three numbers."""
+    config_path.write_text(
+        "example: true\ncalibration:\n  matrix: [[1, 0]]\n  reference_size: [640, 480]\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(config.ConfigError) as error:
+        config.load_calibration()
+
+    assert str(config_path) in str(error.value)

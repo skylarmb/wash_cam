@@ -1,0 +1,13 @@
+# Auto crop calibration
+
+Built calibration so the crop tracks the scene across camera setups. Design was settled with the user before implementing:
+
+- **Calibrate once per setup, not per frame.** The user's call, and a good one. It removes the night-lighting problem entirely (ORB never runs unattended), makes registration failure an interactive event with a human present, and gives zero frame-to-frame jitter — every capture in a session shares one transform, so pixel (x, y) is the same scene point in all of them. That matters for the eventual per-bay ROI and background-subtraction work.
+- **Partial affine, not homography.** The camera moves at most a few centimetres between setups, so there is no meaningful perspective change to model. The 4-DOF model cannot produce a wild warp the way an 8-DOF fit can.
+- **Scope.** The user explicitly deprioritized failure handling ("the captured frame is going to be so similar there will be no problems") and asked for MVP. So there is no coverage-gap check, no preview image, and no drift detection. Those were discussed and deferred, not overlooked.
+
+Storage: the transform goes in `config.yaml` under a `calibration` key, read and written by `load_calibration()` / `save_calibration()` in the config module. These bypass `load_config()` deliberately — that loader requires an `example` key and raises when `config.yaml` is missing, and capture must keep working without a config file. `save_calibration()` seeds from `config.example.yaml` so the file it writes stays valid for `load_config()`, and clears that function's `@cache` so a later read sees the new file. Known MVP limitation: writing rewrites the YAML through PyYAML, so hand-written comments in `config.yaml` are lost.
+
+Also fixed a real bug found while building: `frame[top:bottom, left:right]` accepted out-of-range boxes silently, truncating the crop to the wrong size or producing an empty array that failed later with a cryptic OpenCV assertion. `crop_to_box()` now validates first. Red/green followed the AGENTS.md workflow — 6 parametrized cases confirmed failing for the right reason before the fix.
+
+Validation: 64 tests pass, Ruff lint and format, `uv build`, `git diff --check`. Calibration is covered against hardware-free ground truth — a reference image is warped by a known offset and the estimator must recover its inverse. Live check on the real camera: the second `calibrate` run matched 3049 features against the reference it had just written and recovered a sub-pixel shift (+0.5, -0.6 px, scale 1.00006, rotation ~0.02 degrees), which is correct for a camera that had not moved.

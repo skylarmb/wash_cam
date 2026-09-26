@@ -1,0 +1,7 @@
+# Calibration
+
+The camera is re-seated between setups, so captures land a few pixels off the framing `CAMERA_CROP_BOX` was tuned for. `wash-cam calibrate` corrects this once per setup rather than per frame: it captures a frame, matches ORB features against the stored reference frame, solves for a partial affine transform (translation, rotation, uniform scale) with RANSAC, and writes the result to `config.yaml`. Every later capture reuses that stored transform, so framing stays fixed — and identical, with no frame-to-frame jitter — until the user re-calibrates.
+
+`wash_cam.camera.calibrate` exposes `calibrate(camera_index=0, set_reference=False) -> str` and `run()`. When no reference frame exists, or with `set_reference=True`, the current view is adopted as the reference and an identity transform is stored. The reference image lives at `calibration/reference.jpg` and the transform under a `calibration` key in `config.yaml`; both are local state outside version control. Calibration is read and written without going through `load_config()`, so capturing keeps working before anyone copies `config.example.yaml`.
+
+`take_picture()` calls `align_frame()`, which warps the frame into reference coordinates before `crop_to_box()` runs. An uncalibrated camera returns the frame unchanged, which is the correct transform for a camera still in the reference position, so capture behaves exactly as it did before calibration existed. `crop_to_box()` rejects boxes that do not fit the frame instead of letting numpy silently truncate the crop or produce an empty array.

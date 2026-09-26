@@ -3,6 +3,7 @@
 import argparse
 
 from wash_cam import camera, dashboard, dummy
+from wash_cam.camera import calibrate
 
 
 def main() -> None:
@@ -15,5 +16,9 @@ def main() -> None:
     command.set_defaults(run=camera.run)
     command = commands.add_parser("dashboard", help="Show the latest captured image.")
     command.set_defaults(run=dashboard.run)
+    command = commands.add_parser(
+        "calibrate", help="Align the camera to the reference frame."
+    )
+    command.set_defaults(run=calibrate.run)
     args = parser.parse_args()
     args.run()

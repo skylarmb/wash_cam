@@ -6,9 +6,18 @@ from pathlib import Path
 
 import yaml
 
+# Anchor paths to the src layout, independent of the working directory.
+CHECKOUT_ROOT = Path(__file__).resolve().parents[2]
+CONFIG_PATH = CHECKOUT_ROOT / "config.yaml"
+EXAMPLE_CONFIG_PATH = CHECKOUT_ROOT / "config.example.yaml"
+
+# The reference frame that calibration aligns later captures against. Local
+# state like config.yaml, so it lives outside version control.
+REFERENCE_IMAGE_PATH = CHECKOUT_ROOT / "calibration" / "reference.jpg"
+
 # Pixel box (left, top, right, bottom) used to crop captured images down to
-# the car wash bays. Tuned for the Logitech Brio 101 at its current mount
-# position and 1920x1080 capture resolution; re-tune if either changes.
+# the car wash bays. Expressed in reference-frame coordinates, so calibration
+# keeps it pointed at the same part of the scene when the camera is re-seated.
 CAMERA_CROP_BOX = (390, 250, 1660, 590)
 
 
@@ -17,6 +26,16 @@ class Config:
     """Provide typed settings that callers cannot change."""
 
     example: bool
+
+
+@dataclass(frozen=True)
+class Calibration:
+    """Map coordinates in a freshly captured frame onto the reference frame."""
+
+    # 2x3 affine matrix: translation, rotation, and uniform scale.
+    matrix: tuple[tuple[float, float, float], tuple[float, float, float]]
+    # Reference frame size (width, height) that the matrix maps into.
+    reference_size: tuple[int, int]
 
 
 class ConfigError(Exception):
@@ -30,8 +49,7 @@ def load_config() -> Config:
     Read config.yaml from the checkout root on the first successful call.
     Later calls return the same immutable object. Failed loads can be retried.
     """
-    # Anchor the default to the src layout, independent of the working directory.
-    config_path = Path(__file__).resolve().parents[2] / "config.yaml"
+    config_path = CONFIG_PATH
     try:
         settings = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     except FileNotFoundError as error:
@@ -57,3 +75,82 @@ def load_config() -> Config:
             f"Configuration file {config_path}: example must be a boolean."
         )
     return Config(example=settings["example"])
+
+
+def _read_settings() -> dict:
+    """Return the raw config mapping, or an empty mapping when there is no file.
+
+    Calibration is read and written without going through load_config so that
+    capturing keeps working before anyone copies config.example.yaml.
+    """
+    try:
+        settings = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    except (OSError, UnicodeError) as error:
+        raise ConfigError(
+            f"Cannot read configuration file {CONFIG_PATH}: {error}"
+        ) from error
+    except yaml.YAMLError as error:
+        raise ConfigError(f"Invalid YAML in {CONFIG_PATH}: {error}") from error
+
+    return settings if isinstance(settings, dict) else {}
+
+
+def load_calibration() -> Calibration | None:
+    """Return the stored calibration, or None when the camera is uncalibrated."""
+    stored = _read_settings().get("calibration")
+    if stored is None:
+        return None
+    if not isinstance(stored, dict):
+        raise ConfigError(
+            f"Configuration file {CONFIG_PATH}: calibration must be a mapping."
+        )
+
+    matrix = stored.get("matrix")
+    if (
+        not isinstance(matrix, list)
+        or len(matrix) != 2
+        or not all(isinstance(row, list) and len(row) == 3 for row in matrix)
+        or not all(isinstance(value, (int, float)) for row in matrix for value in row)
+    ):
+        raise ConfigError(
+            f"Configuration file {CONFIG_PATH}: calibration.matrix must be 2 rows of 3 numbers."
+        )
+
+    size = stored.get("reference_size")
+    if (
+        not isinstance(size, list)
+        or len(size) != 2
+        or not all(isinstance(value, int) and value > 0 for value in size)
+    ):
+        raise ConfigError(
+            f"Configuration file {CONFIG_PATH}: "
+            "calibration.reference_size must be two positive integers."
+        )
+
+    return Calibration(
+        matrix=tuple(tuple(float(value) for value in row) for row in matrix),
+        reference_size=(size[0], size[1]),
+    )
+
+
+def save_calibration(calibration: Calibration) -> None:
+    """Write the calibration into config.yaml, leaving other settings in place."""
+    settings = _read_settings()
+    if not settings and EXAMPLE_CONFIG_PATH.is_file():
+        # Seed from the example so the file stays valid for load_config.
+        seed = yaml.safe_load(EXAMPLE_CONFIG_PATH.read_text(encoding="utf-8"))
+        settings = seed if isinstance(seed, dict) else {}
+
+    settings["calibration"] = {
+        "matrix": [list(row) for row in calibration.matrix],
+        "reference_size": list(calibration.reference_size),
+    }
+    # default_flow_style=None keeps the matrix rows on one line each.
+    CONFIG_PATH.write_text(
+        yaml.safe_dump(settings, sort_keys=False, default_flow_style=None),
+        encoding="utf-8",
+    )
+    # Drop the memoized Config so a later load sees the file we just wrote.
+    load_config.cache_clear()

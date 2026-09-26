@@ -6,7 +6,7 @@ import pytest
 
 from wash_cam import camera
 from wash_cam.camera import capture
-from wash_cam.config import CAMERA_CROP_BOX
+from wash_cam.config import CAMERA_CROP_BOX, Calibration
 
 
 class FakeVideoCapture:
@@ -26,6 +26,12 @@ class FakeVideoCapture:
 
     def release(self):
         self.released = True
+
+
+@pytest.fixture(autouse=True)
+def uncalibrated(monkeypatch):
+    """Default to an uncalibrated camera so tests ignore any local config.yaml."""
+    monkeypatch.setattr(capture, "load_calibration", lambda: None)
 
 
 def fake_frame():
@@ -133,6 +139,35 @@ def test_take_picture_raises_when_frame_not_read(monkeypatch, tmp_path):
 
     assert fake_capture.released
     assert list(tmp_path.iterdir()) == []
+
+
+def test_take_picture_applies_the_stored_calibration(monkeypatch, tmp_path):
+    """Warp into reference coordinates before cropping, undoing a camera offset."""
+    left, top, right, bottom = CAMERA_CROP_BOX
+    reference_size = (right + 10, bottom + 10)
+    # A marker placed where the camera's offset put it, not where it belongs.
+    frame = np.zeros((reference_size[1], reference_size[0], 3), dtype=np.uint8)
+    frame[top + 25 : top + 35, left + 45 : left + 55] = 255
+    fake_capture = FakeVideoCapture(opened=True, read_ok=True, frame=frame)
+    monkeypatch.setattr(cv2, "VideoCapture", lambda index: fake_capture)
+    monkeypatch.setattr(capture, "IMAGES_DIR", tmp_path)
+    # Alignment shifts the frame 20px left and 10px up.
+    monkeypatch.setattr(
+        capture,
+        "load_calibration",
+        lambda: Calibration(
+            matrix=((1.0, 0.0, -20.0), (0.0, 1.0, -10.0)),
+            reference_size=reference_size,
+        ),
+    )
+
+    filename = capture.take_picture()
+
+    saved_image = cv2.imread(str(tmp_path / filename))
+    assert saved_image.shape == (bottom - top, right - left, 3)
+    # The marker moved with the warp, landing 20px left and 10px up in the crop.
+    brightest = np.unravel_index(saved_image[:, :, 0].argmax(), saved_image.shape[:2])
+    assert brightest == (25 - 10, 45 - 20)
 
 
 def test_run_prints_saved_filename(monkeypatch, capsys):
