@@ -1,6 +1,6 @@
 # CLI
 
-The `wash-cam` entry point calls `wash_cam.cli.main`. Python 3.10 or later is required. Setuptools builds the package. The CLI uses `argparse` and has no runtime dependencies.
+The `wash-cam` entry point calls `wash_cam.cli.main`. Python 3.10 or later is required. Setuptools builds the package. The CLI uses `argparse`. The package depends on OpenCV for image processing and PyYAML for configuration.
 
 Command packages reside in `src/wash_cam/` and expose their interfaces through `__init__.py`. Register subcommands in `cli.py`. The dummy package exposes `run()`, which prints `Wash Cam is ready.` The camera package exposes `run()`, which calls `take_picture()` and prints the saved filename. The command interface remains provisional.
 
