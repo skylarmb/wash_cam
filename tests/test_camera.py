@@ -34,6 +34,35 @@ def fake_frame():
     return np.zeros((bottom + 10, right + 10, 3), dtype=np.uint8)
 
 
+@pytest.mark.parametrize(
+    ("crop_box", "reason"),
+    [
+        ((390, 250, 2200, 900), "wider than the frame"),
+        ((390, 250, 1660, 1200), "taller than the frame"),
+        ((390, -40, 1660, 590), "negative top"),
+        ((-10, 250, 1660, 590), "negative left"),
+        ((1660, 250, 390, 590), "left past right"),
+        ((390, 590, 1660, 250), "top past bottom"),
+    ],
+    ids=lambda value: value if isinstance(value, str) else "",
+)
+def test_take_picture_rejects_out_of_bounds_crop_box(
+    crop_box, reason, monkeypatch, tmp_path
+):
+    """Raise a clear error instead of silently saving a mis-sized crop."""
+    frame = np.zeros((1080, 1920, 3), dtype=np.uint8)
+    fake_capture = FakeVideoCapture(opened=True, read_ok=True, frame=frame)
+    monkeypatch.setattr(cv2, "VideoCapture", lambda index: fake_capture)
+    monkeypatch.setattr(capture, "IMAGES_DIR", tmp_path)
+    monkeypatch.setattr(capture, "CAMERA_CROP_BOX", crop_box)
+
+    with pytest.raises(ValueError, match="crop box"):
+        capture.take_picture()
+
+    assert fake_capture.released
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_take_picture_saves_cropped_frame(monkeypatch, tmp_path):
     """Save the frame cropped to CAMERA_CROP_BOX and return its filename."""
     fake_capture = FakeVideoCapture(opened=True, read_ok=True, frame=fake_frame())
