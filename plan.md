@@ -17,7 +17,7 @@ This is a hobby project. Loose accuracy is acceptable.
 
 ## Current state (2026-09-26)
 
-- **Server:** the Mac mini (`skylar@10.0.4.25`, checkout `~/workspace/wash_cam`)
+- **Server:** the Mac mini (`skylar@mini.local`, checkout `~/workspace/wash_cam`)
   holds all captures in `tmp/images/` and the only database, `db/labels.sqlite3`.
   Nothing is stored on developer laptops.
 - **Services:** launchd agents `com.washcam.capture`, `com.washcam.dashboard`, and
