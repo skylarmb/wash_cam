@@ -1,0 +1,5 @@
+# Analytics tab
+
+`/analytics?days=N` (1, 7, 30 or 90; default 7, invalid values fall back to 7) shows the Analytics tab. `wash_cam.dashboard.analytics.render` builds it from `image_detections` capture times and the `sessions` table, read-only. The page is plain HTML and CSS with no JavaScript, and it does not auto-refresh; only the live tab does. `page(content, tab=...)` in `dashboard/__init__.py` marks the current tab (`live`, `labeling`, `analytics`).
+
+Every number counts only covered time: capture runs that break at gaps longer than `MAX_GAP_INTERVALS × CAPTURE_INTERVAL`. Tiles show covered hours and wash and vacuum visit counts. Busy hours is a weekday-by-hour heatmap of wash-bay visit starts per covered hour, with cells under 15 covered minutes shown as "no data". Utilization is each bay's session time clipped to covered time, divided by covered time. Duration histograms use only sessions that ended with `left`, in 2-minute bins up to 30+, with the median and 90th percentile, and separate wash and vacuum charts. There is no revenue yet; that waits on pricing (step 4).

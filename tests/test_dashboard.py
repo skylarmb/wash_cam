@@ -13,7 +13,7 @@ from wsgiref.util import setup_testing_defaults
 import pytest
 from werkzeug import serving
 
-from wash_cam import config, dashboard, evaluate, labeling
+from wash_cam import config, dashboard, db, evaluate, labeling
 from wash_cam.cli import main
 from wash_cam.config import BAYS
 
@@ -37,13 +37,8 @@ def request_dashboard(monkeypatch, tmp_path, capsys):
     """Start the CLI with a fake server and call its WSGI application."""
     applications = []
     database = tmp_path / "labels.sqlite3"
-    with sqlite3.connect(database) as connection:
-        connection.executescript(
-            (
-                Path(__file__).resolve().parents[1]
-                / "db/migrations/001_image_labels.sql"
-            ).read_text()
-        )
+    # Build the full schema, as `wash-cam migrate` does on the server.
+    db.migrate(database)
     monkeypatch.setattr(dashboard, "DATABASE_PATH", database, raising=False)
 
     def run_simple(host, port, app, **options):
@@ -411,3 +406,14 @@ def test_dashboard_save_keeps_agent_provenance(request_dashboard, tmp_path):
         labels, dashboard.IMAGES_DIR, dashboard.DATABASE_PATH
     )
     assert result.imported == 1
+
+
+@pytest.mark.parametrize("query", ["?days=3", "?days=abc", ""])
+def test_analytics_tab_renders_without_refresh(request_dashboard, query):
+    """Serve the analytics tab as the current tab, tolerating a bad range."""
+    status, _, body = request_dashboard(f"/analytics{query}")
+
+    assert status == "200 OK"
+    assert b"<h2>Analytics</h2>" in body
+    assert b'<a href="/analytics" aria-current="page">Analytics</a>' in body
+    assert b'http-equiv="refresh"' not in body
