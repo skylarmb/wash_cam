@@ -63,6 +63,7 @@ agents which migration number you take before you write it.
 | Step 5: session scoring command and threshold tuning (ground truth comes from existing dashboard labels) | `src/wash_cam/sessions.py`, `src/wash_cam/session_eval.py`, `src/wash_cam/cli.py`, `tests/test_session_eval.py` | SapphireCompass (scorer done; tuning waits for labeled sequences) |
 | Step 7: nightly backups | `scripts/backup_db.sh`, one entry in `scripts/install_services.sh` | HazyValley |
 | Step 7: capture heartbeat (alerts go to `NOTIFICATIONS.md`) | `src/wash_cam/heartbeat.py` and its tests | ChartreuseCrane |
+| Step 5: record which label counts a human reviewed | `src/wash_cam/dashboard/` and its tests | StormyCliff |
 | Steps 4 and 6: revenue and analytics (blocked on pricing and step 5) | `src/wash_cam/dashboard/`, a new revenue module | Later, probably SapphireCompass |
 | Coordination: `plan.md` status and `AGENTS.md` | `plan.md`, `AGENTS.md` | ScarletEagle |
 
@@ -138,7 +139,7 @@ agents which migration number you take before you write it.
   these scores.
 - [ ] Get daily revenue totals from the owner if possible. A week of totals
   would be the best check on overall accuracy.
-- [ ] Not assigned: record which counts a human reviewed. The labeling tab
+- [ ] StormyCliff: record which counts a human reviewed. The labeling tab
   carries counts forward and saves them on navigation, so a saved count is not
   always ground truth. Store the reviewed bays in `image_labels.metadata` (for
   example, an `edited_bays` list). No migration is needed. The session scorer
