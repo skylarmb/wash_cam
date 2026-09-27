@@ -6,6 +6,17 @@
 # logged and the loop continues.
 set -uo pipefail
 
+# An idle Mac suspends this loop mid-run: the CPU stops and the USB camera
+# powers down, so nothing can be captured while asleep. Re-exec under
+# caffeinate to hold sleep off for exactly as long as the run lasts.
+#   -i no idle system sleep   -m no disk sleep   -s no system sleep (on AC)
+# Display sleep is deliberately left alone; the screen can turn off without
+# affecting capture.
+if [ -z "${CAPTURE_LOOP_CAFFEINATED:-}" ] && command -v caffeinate >/dev/null; then
+  export CAPTURE_LOOP_CAFFEINATED=1
+  exec caffeinate -ims "$0" "$@"
+fi
+
 cd "$(dirname "$0")/.."
 
 INTERVAL="${INTERVAL:-30}"
@@ -23,6 +34,12 @@ echo "$(date -Iseconds) starting: interval ${INTERVAL}s, duration ${DURATION}s" 
 
 while [ "$(date +%s)" -lt "$end" ]; do
   started=$(date +%s)
+  # A gap far longer than the interval means the machine was suspended rather
+  # than the capture being slow. Record it so lost time is visible in the log.
+  if [ -n "${previous:-}" ] && [ $((started - previous)) -gt $((INTERVAL * 3)) ]; then
+    echo "$(date -Iseconds) WARNING: $((started - previous))s since previous capture (suspended?)" >>"$LOG"
+  fi
+  previous=$started
   if output=$("$WASH_CAM" camera 2>&1); then
     echo "$(date -Iseconds) $output" >>"$LOG"
   else
