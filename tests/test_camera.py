@@ -69,6 +69,56 @@ def test_take_picture_rejects_out_of_bounds_crop_box(
     assert list(tmp_path.iterdir()) == []
 
 
+class SequenceVideoCapture:
+    """Return a different frame per read, so warm-up discards are observable."""
+
+    def __init__(self, frames):
+        self.frames = list(frames)
+        self.reads = 0
+
+    def isOpened(self):
+        return True
+
+    def read(self):
+        frame = self.frames[min(self.reads, len(self.frames) - 1)]
+        self.reads += 1
+        return True, frame
+
+    def release(self):
+        pass
+
+
+def test_grab_frame_discards_warmup_frames(monkeypatch):
+    """Let auto-exposure settle by discarding frames before the one kept.
+
+    A cold camera needs streaming time before its exposure converges, so the
+    first frames after opening can be unusable.
+    """
+    # Each frame is a distinct flat value, so the returned one identifies itself.
+    frames = [np.full((10, 10, 3), value, dtype=np.uint8) for value in (1, 2, 3, 4, 5)]
+    fake_capture = SequenceVideoCapture(frames)
+    monkeypatch.setattr(cv2, "VideoCapture", lambda index: fake_capture)
+    monkeypatch.setattr(capture, "CAMERA_WARMUP_FRAMES", 4)
+
+    frame = capture.grab_frame()
+
+    assert fake_capture.reads == 5
+    assert frame[0, 0, 0] == 5
+
+
+def test_grab_frame_without_warmup_keeps_the_first_frame(monkeypatch):
+    """Read exactly one frame when warm-up is disabled."""
+    frames = [np.full((10, 10, 3), value, dtype=np.uint8) for value in (1, 2)]
+    fake_capture = SequenceVideoCapture(frames)
+    monkeypatch.setattr(cv2, "VideoCapture", lambda index: fake_capture)
+    monkeypatch.setattr(capture, "CAMERA_WARMUP_FRAMES", 0)
+
+    frame = capture.grab_frame()
+
+    assert fake_capture.reads == 1
+    assert frame[0, 0, 0] == 1
+
+
 def test_take_picture_saves_cropped_frame(monkeypatch, tmp_path):
     """Save the frame cropped to CAMERA_CROP_BOX and return its filename."""
     fake_capture = FakeVideoCapture(opened=True, read_ok=True, frame=fake_frame())

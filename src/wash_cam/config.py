@@ -20,6 +20,13 @@ REFERENCE_IMAGE_PATH = CHECKOUT_ROOT / "calibration" / "reference.jpg"
 # keeps it pointed at the same part of the scene when the camera is re-seated.
 CAMERA_CROP_BOX = (390, 250, 1660, 590)
 
+# Frames read and discarded before the one that gets saved. A cold camera needs
+# streaming time before auto-exposure converges: after the USB device powers
+# back up, captures ramped from near-black to correctly exposed over roughly
+# three seconds of cumulative sensor run-time. Costs about 0.2s per capture and
+# makes no difference once the camera is warm.
+CAMERA_WARMUP_FRAMES = 4
+
 
 @dataclass(frozen=True)
 class Config:

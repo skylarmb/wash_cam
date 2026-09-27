@@ -6,7 +6,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from wash_cam.config import CAMERA_CROP_BOX, load_calibration
+from wash_cam.config import CAMERA_CROP_BOX, CAMERA_WARMUP_FRAMES, load_calibration
 
 # Images are saved relative to the repository root, three levels above this file
 # (src/wash_cam/camera/capture.py -> repo root).
@@ -38,6 +38,10 @@ def crop_to_box(frame, crop_box: tuple[int, int, int, int]):
 def grab_frame(camera_index: int = 0):
     """Capture one raw, unaligned frame from the webcam.
 
+    Discards CAMERA_WARMUP_FRAMES frames first so auto-exposure has streaming
+    time to converge; a camera that just powered up otherwise returns frames
+    that are far too dark.
+
     Raises RuntimeError if the camera cannot be opened or a frame cannot be read.
     """
     capture = cv2.VideoCapture(camera_index)
@@ -46,6 +50,8 @@ def grab_frame(camera_index: int = 0):
         raise RuntimeError(f"Could not open camera at index {camera_index}.")
 
     try:
+        for _ in range(CAMERA_WARMUP_FRAMES):
+            capture.read()
         read_ok, frame = capture.read()
     finally:
         capture.release()
