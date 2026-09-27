@@ -35,7 +35,7 @@ Start the dashboard in a separate terminal:
 uv run wash-cam dashboard
 ```
 
-Open http://127.0.0.1:8000 on this computer. The page shows the latest JPEG from the checkout's `tmp/images/` directory.
+Open http://127.0.0.1:8000 on this computer. The page shows the latest JPEG from the checkout's `images/` directory.
 It reloads every 30 seconds and selects the latest image by its timestamp filename.
 The same image stays visible until a newer capture appears. An empty or missing directory shows `No images yet`.
 The dashboard does not capture images. Press Ctrl+C to stop it.

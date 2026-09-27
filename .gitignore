@@ -8,3 +8,4 @@ dist/
 tmp/
 /config.yaml
 /calibration/
+.DS_Store

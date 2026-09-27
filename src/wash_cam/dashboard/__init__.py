@@ -1,8 +1,10 @@
 """Serve the latest camera capture on a local web page."""
 
+from pathlib import Path
 from wsgiref import simple_server
 
-from wash_cam.camera import capture
+# Read shared images from the checkout, regardless of the working directory.
+IMAGES_DIR = Path(__file__).resolve().parents[3] / "images"
 
 
 def application(environ, start_response):
@@ -16,7 +18,7 @@ def application(environ, start_response):
     if path in ("/", "/latest.jpg"):
         # Timestamp filenames sort in capture order, even if file times change.
         latest = max(
-            (image for image in capture.IMAGES_DIR.glob("*.jpg") if image.is_file()),
+            (image for image in IMAGES_DIR.glob("*.jpg") if image.is_file()),
             key=lambda image: image.name,
             default=None,
         )
