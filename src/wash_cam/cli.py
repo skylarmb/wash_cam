@@ -17,8 +17,17 @@ def main() -> None:
     command = commands.add_parser("dashboard", help="Show the latest captured image.")
     command.set_defaults(run=dashboard.run)
     command = commands.add_parser(
-        "calibrate", help="Align the camera to the reference frame."
+        "calibrate", help="Align the camera to the reference frames."
+    )
+    command.add_argument(
+        "--set-reference",
+        metavar="NAME",
+        dest="reference_name",
+        help="Record the current view as a named reference (e.g. day, night).",
     )
     command.set_defaults(run=calibrate.run)
     args = parser.parse_args()
-    args.run()
+    arguments = vars(args)
+    arguments.pop("command", None)
+    run_command = arguments.pop("run")
+    run_command(**arguments)

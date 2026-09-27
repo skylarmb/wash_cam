@@ -11,9 +11,17 @@ CHECKOUT_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = CHECKOUT_ROOT / "config.yaml"
 EXAMPLE_CONFIG_PATH = CHECKOUT_ROOT / "config.example.yaml"
 
-# The reference frame that calibration aligns later captures against. Local
-# state like config.yaml, so it lives outside version control.
-REFERENCE_IMAGE_PATH = CHECKOUT_ROOT / "calibration" / "reference.jpg"
+# Reference frames that calibration aligns later captures against, one per
+# lighting condition (day, night, ...). All are stored in canonical
+# coordinates, so CAMERA_CROP_BOX means the same thing against any of them.
+# Local state like config.yaml, so they live outside version control.
+REFERENCES_DIR = CHECKOUT_ROOT / "calibration" / "references"
+
+# Minimum RANSAC inliers before a solved alignment is trusted. Matching a night
+# frame against a daytime reference yielded 4 inliers and an 809px error, while
+# genuine matches yield thousands, so a low count means the scenes did not
+# really correspond and the transform must be rejected rather than stored.
+MIN_CALIBRATION_INLIERS = 50
 
 # Pixel box (left, top, right, bottom) used to crop captured images down to
 # the car wash bays. Expressed in reference-frame coordinates, so calibration
