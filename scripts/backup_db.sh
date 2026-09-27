@@ -10,9 +10,14 @@ DB="${DB:-$CHECKOUT/db/labels.sqlite3}"
 DEST="${DEST:-$CHECKOUT/tmp/backups}"
 KEEP="${KEEP:-7}"
 
+# sqlite3 creates a missing database, so check first and open it read-only.
+if [ ! -f "$DB" ]; then
+  echo "backup_db: source database $DB does not exist" >&2
+  exit 1
+fi
 mkdir -p "$DEST"
 out="$DEST/nightly-$(date +%Y%m%d-%H%M%S).sqlite3"
-sqlite3 "$DB" ".backup '$out'"
+sqlite3 -readonly "$DB" ".backup '$out'"
 echo "$(date -Iseconds) backed up $DB to $out"
 
 # Timestamped names sort by age, so delete all but the newest KEEP. macOS head
