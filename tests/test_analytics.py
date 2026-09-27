@@ -1,7 +1,7 @@
 """Check the analytics tab's coverage, utilization, busy hours, and durations."""
 
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -165,7 +165,7 @@ def test_revenue_by_day_and_hour_counts_only_complete_visits(pacific):
 
     by_day, by_hour = analytics.revenue_totals(found)
 
-    assert by_day == {"Sat 2026-09-26": pytest.approx(9.0)}
+    assert by_day == {date(2026, 9, 26): pytest.approx(9.0)}
     assert by_hour == {20: pytest.approx(8.0), 21: pytest.approx(1.0)}
 
 
@@ -185,3 +185,13 @@ def test_p90_stays_within_the_observed_durations():
     )
 
     assert histogram.p90_s <= 17 * 60
+
+
+def test_render_revenue_lists_days_in_date_order(pacific):
+    """Days sort by date, not by the weekday name that prefixes them."""
+    saturday = visit("bay_0", 0, 5)
+    monday = visit("bay_0", 2 * 24 * 60, 2 * 24 * 60 + 5)
+
+    html = analytics.render_revenue([monday, saturday])
+
+    assert html.index("Sat 2026-09-26") < html.index("Mon 2026-09-28")
