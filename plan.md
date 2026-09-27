@@ -55,7 +55,7 @@ Follow the red/green workflow in `AGENTS.md` for every step.
 
 ### Owners
 
-Owners are Agent Mail agent names. Numbered rows run in that order. Reserve files before you edit them. Tell all
+Owners are Agent Mail agent names. Numbered rows run in that order. ScarletEagle is the only agent that merges into `main` and deploys. Other agents push feature branches and send the SHA after QA passes. Reserve files before you edit them. Tell all
 agents which migration number you take before you write it.
 
 | Work | Main files | Owner |
