@@ -229,16 +229,16 @@ This is a shared scratchpad for all agents, anything can go here that you think 
 
 ### Agent Mail
 
-Agents on all machines coordinate through MCP Agent Mail. The server runs on the Mac mini (`mini`) at `http://mini.local:8765/api/` on the LAN. Machines off the LAN can use the Tailscale tailnet URL `http://mini.tail951c67.ts.net:8765/api/` instead; substitute it and `skylar@mini` in the commands below.
+Agents on all machines coordinate through MCP Agent Mail. The server runs on the Mac mini at `http://mini.tail951c67.ts.net:8765/api/` (the Tailscale tailnet name). Do not use `mini.local` for Agent Mail: it resolves to IPv6 first, the server listens only on IPv4, and the Claude Code MCP client does not fall back to IPv4. `mini.local` is fine for `ssh` and the browser. A machine that is not on the tailnet can use the mini's current IPv4 address (`ping -4 -c 1 mini.local` shows it), which can change with DHCP.
 
 If the `mcp-agent-mail` tools are not available to you, onboard your machine:
 
-1. Make sure the machine can reach the mini. Run `ping -c 1 mini.local` (or `tailscale ping mini` for the tailnet fallback).
+1. Make sure the machine can reach the mini. Run `tailscale ping mini`.
 2. Get the bearer token over SSH from the mini. The token is `HTTP_BEARER_TOKEN` in `~/.local/share/mcp_agent_mail/.env` on the mini. Do not print the token, write it to the repo, or commit it.
 3. Add the server to your MCP config. For Claude Code, run this as one command:
 
    ```sh
-   claude mcp add --transport http --scope user mcp-agent-mail http://mini.local:8765/api/ --header "Authorization: Bearer $(ssh skylar@mini.local "sed -n 's/^HTTP_BEARER_TOKEN=//p' ~/.local/share/mcp_agent_mail/.env")"
+   claude mcp add --transport http --scope user mcp-agent-mail http://mini.tail951c67.ts.net:8765/api/ --header "Authorization: Bearer $(ssh skylar@mini.local "sed -n 's/^HTTP_BEARER_TOKEN=//p' ~/.local/share/mcp_agent_mail/.env")"
    ```
 
    For other agents, add an HTTP MCP server with the same URL and `Authorization` header.
@@ -249,7 +249,7 @@ If the `mcp-agent-mail` tools are not available to you, onboard your machine:
    ```sh
    mkdir -p ~/.local/share/mcp_agent_mail/scripts/hooks ~/.config/agent_mail &&
    scp skylar@mini.local:.local/share/mcp_agent_mail/scripts/hooks/check_inbox.sh ~/.local/share/mcp_agent_mail/scripts/hooks/ &&
-   (umask 077; printf 'AGENT_MAIL_PROJECT=/Users/skylar/workspace/wash_cam\nAGENT_MAIL_URL=http://mini.local:8765/api/\nAGENT_MAIL_TOKEN=%s\n' "$(ssh skylar@mini.local "sed -n 's/^HTTP_BEARER_TOKEN=//p' ~/.local/share/mcp_agent_mail/.env")" > ~/.config/agent_mail/env)
+   (umask 077; printf 'AGENT_MAIL_PROJECT=/Users/skylar/workspace/wash_cam\nAGENT_MAIL_URL=http://mini.tail951c67.ts.net:8765/api/\nAGENT_MAIL_TOKEN=%s\n' "$(ssh skylar@mini.local "sed -n 's/^HTTP_BEARER_TOKEN=//p' ~/.local/share/mcp_agent_mail/.env")" > ~/.config/agent_mail/env)
    ```
 
    The env file has mode 600 and stays outside the repo. On the mini, the script and the env file already exist.
