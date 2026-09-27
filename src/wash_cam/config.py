@@ -21,6 +21,13 @@ DATABASE_PATH = CHECKOUT_ROOT / "db" / "labels.sqlite3"
 # Each session's start and end are uncertain by up to one interval.
 CAPTURE_INTERVAL = 15.0
 
+# Prices for estimated revenue, in dollars. A wash-bay session earns
+# max(WASH_MINIMUM, WASH_RATE_PER_MIN * minutes), unrounded.
+WASH_RATE_PER_MIN = 1.00
+WASH_MINIMUM = 3.00
+# Placeholder until Skylar confirms the vacuum price. No minimum.
+VACUUM_RATE_PER_MIN = 0.25
+
 # Reference frames that calibration aligns later captures against, one per
 # lighting condition (day, night, ...). All are stored in canonical
 # coordinates, so CAMERA_CROP_BOX means the same thing against any of them.

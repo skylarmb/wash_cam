@@ -1,8 +1,8 @@
 """Analytics tab: busy hours, bay utilization, and wash durations from sessions.
 
 Everything is measured against covered time, the time captures were actually
-running, so camera outages never look like quiet hours. Revenue is left out
-until real prices exist (plan.md step 4).
+running, so camera outages never look like quiet hours. Revenue is an estimate
+from the prices in config.py; no owner totals exist to check it against.
 """
 
 import sqlite3
@@ -15,7 +15,13 @@ from datetime import datetime, timedelta, timezone
 from html import escape
 from pathlib import Path
 
-from wash_cam.config import BAYS, CAPTURE_INTERVAL
+from wash_cam.config import (
+    BAYS,
+    CAPTURE_INTERVAL,
+    VACUUM_RATE_PER_MIN,
+    WASH_MINIMUM,
+    WASH_RATE_PER_MIN,
+)
 from wash_cam.sessions import MAX_GAP_INTERVALS, Session, format_time
 
 __all__ = [
@@ -23,6 +29,8 @@ __all__ = [
     "coverage_runs",
     "duration_histogram",
     "render",
+    "revenue_totals",
+    "session_revenue",
     "utilization",
 ]
 
@@ -164,7 +172,8 @@ def duration_histogram(found: Sequence[Session]) -> Histogram:
         f"{index * BIN_MINUTES}–{(index + 1) * BIN_MINUTES}" for index in range(last)
     ] + [f"{MAX_BIN_MINUTES}+"]
     if len(durations) >= 2:
-        p90 = statistics.quantiles(durations, n=10)[-1]
+        # Inclusive quantiles stay within the observed durations.
+        p90 = statistics.quantiles(durations, n=10, method="inclusive")[-1]
     else:
         p90 = durations[0] if durations else None
     return Histogram(
@@ -172,6 +181,61 @@ def duration_histogram(found: Sequence[Session]) -> Histogram:
         count=len(durations),
         median_s=statistics.median(durations) if durations else None,
         p90_s=p90,
+    )
+
+
+def session_revenue(session: Session) -> float:
+    """Estimated dollars for one visit at the configured prices."""
+    minutes = session.duration_s / 60
+    if session.bay_id.startswith("vac_"):
+        return VACUUM_RATE_PER_MIN * minutes
+    return max(WASH_MINIMUM, WASH_RATE_PER_MIN * minutes)
+
+
+def revenue_totals(
+    found: Sequence[Session],
+) -> tuple[dict[str, float], dict[int, float]]:
+    """Sum complete visits' revenue by local start day and by local start hour.
+
+    Visits cut off by a gap or still open have unknown length, so they are left out.
+    """
+    by_day: dict[str, float] = defaultdict(float)
+    by_hour: dict[int, float] = defaultdict(float)
+    for session in found:
+        if session.end_reason != "left":
+            continue
+        local = session.started_at.astimezone()
+        by_day[local.strftime("%a %Y-%m-%d")] += session_revenue(session)
+        by_hour[local.hour] += session_revenue(session)
+    return dict(by_day), dict(by_hour)
+
+
+def render_revenue(found: Sequence[Session]) -> str:
+    """Estimated revenue tables by day and by hour of day."""
+    by_day, by_hour = revenue_totals(found)
+    note = (
+        '<p class="note">Estimates only, from complete visits: wash bays at '
+        f"${WASH_RATE_PER_MIN:.2f}/min with a ${WASH_MINIMUM:.2f} minimum, the "
+        f"vacuum at ${VACUUM_RATE_PER_MIN:.2f}/min (a placeholder price). No owner "
+        "totals exist to check these against.</p>"
+    )
+    if not by_day:
+        return f"<h2>Estimated revenue</h2>{note}<p>No complete visits yet.</p>"
+
+    def table(caption: str, rows: dict) -> str:
+        """One two-column table of estimated dollars."""
+        body = "".join(
+            f"<tr><th>{escape(str(key))}</th><td>${value:.2f}</td></tr>"
+            for key, value in rows.items()
+        )
+        return f'<table class="revenue"><caption>{caption}</caption>{body}</table>'
+
+    hours = {f"{hour:02d}:00": by_hour[hour] for hour in sorted(by_hour)}
+    return (
+        f"<h2>Estimated revenue</h2>{note}"
+        f"<p><strong>${sum(by_day.values()):.2f}</strong> estimated in this range</p>"
+        f"{table('By day', dict(sorted(by_day.items())))}"
+        f"{table('By hour of day, all days', hours)}"
     )
 
 
@@ -332,6 +396,11 @@ STYLE = """<style>
   border-radius: 4px; }
 .viz-root .bar-value { text-align: right; font-variant-numeric: tabular-nums; }
 .viz-root .heat-wrap { overflow-x: auto; }
+.viz-root .revenue { border-collapse: collapse; margin: .5rem 2rem 1rem 0;
+  display: inline-table; vertical-align: top; font-variant-numeric: tabular-nums; }
+.viz-root .revenue caption { text-align: left; }
+.viz-root .revenue th, .viz-root .revenue td { padding: .2rem .75rem .2rem 0; text-align: left; }
+.viz-root .revenue td { text-align: right; }
 .viz-root .heat { border-collapse: separate; border-spacing: 2px; font-size: .75rem; }
 .viz-root .heat caption { text-align: left; }
 .viz-root .heat th { color: var(--muted); font-weight: normal; }
@@ -398,5 +467,6 @@ def render(database: Path, days: int = 7, now: datetime | None = None) -> str:
         f"{render_histogram('Wash bays', duration_histogram(wash))}</div>"
         '<div class="hist-wrap">'
         f"{render_histogram('Vacuum', duration_histogram(vacuum))}</div>"
+        f"{render_revenue(found)}"
         "</div>"
     )
