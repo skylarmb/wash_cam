@@ -56,7 +56,7 @@ def request_dashboard(monkeypatch, tmp_path, capsys):
 
     def run_simple(host, port, app, **options):
         """Record the application instead of opening a socket."""
-        assert (host, port) == ("127.0.0.1", 8000)
+        assert (host, port) == ("0.0.0.0", 8000)
         applications.append(app)
         assert options["use_reloader"] is True
 
@@ -320,8 +320,8 @@ def test_navigation_saves_before_leaving(request_dashboard, direction, outcome):
     assert result.returncode == 0, result.stderr
 
 
-def test_dashboard_reloads_by_default(monkeypatch):
-    """Start the CLI with automatic reload and no interactive debugger."""
+def test_dashboard_serves_network_with_reload(monkeypatch):
+    """Listen on all IPv4 interfaces with reload and no interactive debugger."""
     calls = []
 
     def run_simple(host, port, app, **options):
@@ -334,7 +334,7 @@ def test_dashboard_reloads_by_default(monkeypatch):
 
     assert len(calls) == 1
     host, port, app, options = calls[0]
-    assert (host, port, app) == ("127.0.0.1", 8000, dashboard.application)
+    assert (host, port, app) == ("0.0.0.0", 8000, dashboard.application)
     assert options["use_reloader"] is True
     assert options.get("use_debugger", False) is False
 

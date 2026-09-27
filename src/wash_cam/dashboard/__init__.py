@@ -332,6 +332,9 @@ def application(environ, start_response):
 
 def run() -> None:
     """Serve the dashboard and restart when Python source files change."""
-    print("Dashboard: http://127.0.0.1:8000", flush=True)
+    print(
+        "Dashboard: http://127.0.0.1:8000 (network: http://<host-ip>:8000)", flush=True
+    )
+    # Listen on all IPv4 interfaces so other computers can access the dashboard.
     # The development reloader runs the application in a restartable child process.
-    serving.run_simple("127.0.0.1", 8000, application, use_reloader=True)
+    serving.run_simple("0.0.0.0", 8000, application, use_reloader=True)

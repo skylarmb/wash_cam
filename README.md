@@ -35,7 +35,10 @@ Start the dashboard in a separate terminal:
 uv run wash-cam dashboard
 ```
 
-Open http://127.0.0.1:8000 on this computer. The Live view tab shows the latest JPEG from the checkout's `images/` directory.
+The dashboard listens on all IPv4 interfaces at port 8000.
+Open http://127.0.0.1:8000 on this computer, or `http://<host-ip>:8000` from another computer on the network.
+For the Mac Mini at `10.0.4.25`, open http://10.0.4.25:8000.
+The Live view tab shows the latest JPEG from the checkout's `images/` directory.
 It reloads every 30 seconds and selects the latest image by its timestamp filename.
 The same image stays visible until a newer capture appears. An empty or missing directory shows `No images yet`.
 The server restarts automatically when Python source files change. No reload flag is required.
