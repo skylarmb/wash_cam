@@ -6,7 +6,8 @@ from contextlib import closing
 from html import escape
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode
-from wsgiref import simple_server
+
+from werkzeug import serving
 
 # Resolve shared files from the checkout, regardless of the working directory.
 ROOT = Path(__file__).resolve().parents[3]
@@ -283,10 +284,7 @@ def application(environ, start_response):
 
 
 def run() -> None:
-    """Serve the dashboard until the user presses Ctrl+C."""
-    with simple_server.make_server("127.0.0.1", 8000, application) as server:
-        print("Dashboard: http://127.0.0.1:8000", flush=True)
-        try:
-            server.serve_forever()
-        except KeyboardInterrupt:
-            pass
+    """Serve the dashboard and restart when Python source files change."""
+    print("Dashboard: http://127.0.0.1:8000", flush=True)
+    # The development reloader runs the application in a restartable child process.
+    serving.run_simple("127.0.0.1", 8000, application, use_reloader=True)

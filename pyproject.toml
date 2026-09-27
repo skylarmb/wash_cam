@@ -11,6 +11,7 @@ dependencies = [
     "numpy>=2.2.6",
     "opencv-python>=5.0.0.93",
     "pyyaml>=6.0",
+    "werkzeug>=3.1",
 ]
 
 [project.scripts]

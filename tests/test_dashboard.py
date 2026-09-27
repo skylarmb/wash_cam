@@ -6,14 +6,12 @@ import shutil
 import sqlite3
 import subprocess
 import sys
-from contextlib import contextmanager
 from pathlib import Path
-from types import SimpleNamespace
 from urllib.parse import urlsplit
-from wsgiref import simple_server
 from wsgiref.util import setup_testing_defaults
 
 import pytest
+from werkzeug import serving
 
 from wash_cam import dashboard
 from wash_cam.cli import main
@@ -50,14 +48,13 @@ def request_dashboard(monkeypatch, tmp_path, capsys):
         )
     monkeypatch.setattr(dashboard, "DATABASE_PATH", database, raising=False)
 
-    @contextmanager
-    def make_server(host, port, app):
+    def run_simple(host, port, app, **options):
         """Record the application instead of opening a socket."""
         assert (host, port) == ("127.0.0.1", 8000)
         applications.append(app)
-        yield SimpleNamespace(serve_forever=lambda: None)
+        assert options["use_reloader"] is True
 
-    monkeypatch.setattr(simple_server, "make_server", make_server)
+    monkeypatch.setattr(serving, "run_simple", run_simple)
     monkeypatch.setattr(dashboard, "IMAGES_DIR", tmp_path / "images")
     monkeypatch.setattr(sys, "argv", ["wash-cam", "dashboard"])
     main()
@@ -310,3 +307,22 @@ def test_navigation_saves_before_leaving(request_dashboard, direction, outcome):
         capture_output=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_dashboard_reloads_by_default(monkeypatch):
+    """Start the CLI with automatic reload and no interactive debugger."""
+    calls = []
+
+    def run_simple(host, port, app, **options):
+        """Record server settings without opening a socket or starting a child."""
+        calls.append((host, port, app, options))
+
+    monkeypatch.setattr(serving, "run_simple", run_simple)
+    monkeypatch.setattr(sys, "argv", ["wash-cam", "dashboard"])
+    main()
+
+    assert len(calls) == 1
+    host, port, app, options = calls[0]
+    assert (host, port, app) == ("127.0.0.1", 8000, dashboard.application)
+    assert options["use_reloader"] is True
+    assert options.get("use_debugger", False) is False

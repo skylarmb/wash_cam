@@ -38,7 +38,9 @@ uv run wash-cam dashboard
 Open http://127.0.0.1:8000 on this computer. The Live view tab shows the latest JPEG from the checkout's `images/` directory.
 It reloads every 30 seconds and selects the latest image by its timestamp filename.
 The same image stays visible until a newer capture appears. An empty or missing directory shows `No images yet`.
-The dashboard does not capture images. Press Ctrl+C to stop it.
+The server restarts automatically when Python source files change. No reload flag is required.
+Refresh the browser to load changed page code. The labeling tab does not refresh automatically.
+The dashboard uses Werkzeug’s development server and does not capture images. Press Ctrl+C to stop it.
 
 ## Configure local settings
 
