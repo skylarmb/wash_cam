@@ -11,6 +11,7 @@ from wash_cam import (
     detect,
     dummy,
     evaluate,
+    session_eval,
     sessions,
     watch,
 )
@@ -97,6 +98,25 @@ def main() -> None:
         help="Recompute every session, e.g. after changing thresholds or detections.",
     )
     command.set_defaults(run=sessions.run)
+    command = commands.add_parser(
+        "score-sessions",
+        help="Score predicted bay sessions against sessions from human labels.",
+    )
+    command.add_argument(
+        "--open",
+        type=int,
+        default=sessions.OPEN_FRAMES,
+        dest="open_frames",
+        help="Occupied frames in a row that open a predicted session.",
+    )
+    command.add_argument(
+        "--close",
+        type=int,
+        default=sessions.CLOSE_FRAMES,
+        dest="close_frames",
+        help="Empty frames in a row that close a predicted session.",
+    )
+    command.set_defaults(run=session_eval.run)
     args = parser.parse_args()
     arguments = vars(args)
     arguments.pop("command", None)
