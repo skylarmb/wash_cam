@@ -62,11 +62,11 @@ agents which migration number you take before you write it.
 |---|---|---|
 | Step 5: session scorer (`score-sessions`) | `src/wash_cam/session_eval.py`, `src/wash_cam/cli.py` | SapphireCompass (done, `fa78c9f`) |
 | Step 5: `label-export` and label importer | `src/wash_cam/labeling.py`, CLI commands, tests | SapphireCompass (done, `6615591`) |
-| 1. Step 7: capture heartbeat (alerts go to `NOTIFICATIONS.md`) | `src/wash_cam/heartbeat.py` and its tests, one entry in `scripts/install_services.sh` | ScarletEagle (done, awaiting QA and deploy) |
-| 2. Step 5: agent labeling of the first batch (StormyCliff blind-checks about 30 frames before import) | label files only, no code | SapphireCompass |
-| 3. Step 7: nightly backups | `scripts/backup_db.sh`, one entry in `scripts/install_services.sh` | SapphireCompass |
-| 4. Step 6: Analytics tab without revenue (heatmap, utilization, durations) | `src/wash_cam/dashboard/analytics.py` and its tests, route registration in `dashboard/__init__.py` | SapphireCompass |
-| Step 5: threshold tuning (after labels are imported) | `src/wash_cam/sessions.py` | SapphireCompass |
+| Step 7: capture heartbeat (alerts go to `NOTIFICATIONS.md`) | `src/wash_cam/heartbeat.py` and its tests, one entry in `scripts/install_services.sh` | ScarletEagle (done, deployed `0f02100`) |
+| 2. Step 5: agent labeling of the first batch (StormyCliff blind-checks about 30 frames before import) | label files only, no code | SilentIsland (in progress) |
+| 3. Step 7: nightly backups | `scripts/backup_db.sh`, one entry in `scripts/install_services.sh` | SilentIsland |
+| 4. Step 6: Analytics tab without revenue (heatmap, utilization, durations) | `src/wash_cam/dashboard/analytics.py` and its tests, route registration in `dashboard/__init__.py` | SilentIsland (rebuild from the approved design) |
+| Step 5: threshold tuning (after labels are imported) | `src/wash_cam/sessions.py` | SilentIsland |
 | Step 4 and revenue in step 6 (blocked on pricing) | a new revenue module | Later, probably SapphireCompass |
 | Coordination: `plan.md` status and `AGENTS.md` | `plan.md`, `AGENTS.md` | ScarletEagle |
 | QA: correctness, validation, simplicity, and scope reviews | review findings only | StormyCliff |
