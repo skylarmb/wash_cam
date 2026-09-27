@@ -2,6 +2,184 @@
 
 Read README.md for main project info.
 
+## Shared Mac Mini
+
+The Mini is the shared live test server. Connect with `ssh skylar@10.0.4.25`.
+Its checkout is `/Users/skylar/workspace/wash_cam`. Its dashboard is http://10.0.4.25:8000.
+The checkout uses `main` and `origin` (`git@github.com:skylarmb/wash_cam.git`).
+Use Git to transfer code. Do not copy a local checkout or virtual environment over the server.
+
+### Services and data
+
+Verified on 2026-09-26 at server commit `0ad5486`:
+
+| Component | Management | Output |
+| --- | --- | --- |
+| Dashboard | LaunchAgent `com.washcam.dashboard` | Port 8000, `tmp/logs/dashboard.log` |
+| Detection watcher | LaunchAgent `com.washcam.watch` | `db/labels.sqlite3`, `tmp/logs/watch.log` |
+| Camera capture | `scripts/capture_loop.sh` in tmux | `tmp/images/`, `tmp/capture.log` |
+
+LaunchAgent definitions reside in `~/Library/LaunchAgents/` with the label plus `.plist` as their names.
+They run `.venv/bin/wash-cam dashboard` and `.venv/bin/wash-cam watch` from the server checkout.
+They start at user login and restart after exit. They require Skylar's GUI login session.
+An SSH connection alone does not establish that session. Do not use `sudo` or the system launchd domain.
+The dashboard has a Werkzeug reload parent and child. Two dashboard processes are normal.
+Python edits can reload the dashboard immediately. The watcher requires an explicit restart after code changes.
+Refresh the browser after dashboard changes.
+
+The watcher scans captures every five seconds and stores results for images without detections.
+It does not capture images or recompute existing detections after a model change.
+The capture loop defaults to a 30-second interval and an eight-hour duration.
+It uses `caffeinate -ims` to prevent sleep and starts a new camera process for each capture.
+It is not a LaunchAgent and does not restart automatically after exit or reboot.
+
+Keep `config.yaml`, calibration files, captures, model caches, and the live database on the Mini.
+At the verified server revision, Git ignores `db/labels.sqlite3` and its journals.
+Older revisions tracked that database and lacked `watch`, `migrate`, and `scripts/install_services.sh`.
+Check the server revision before using instructions from an older local checkout.
+Never replace the live database with a local copy or delete captures to clean the checkout.
+Use the live dashboard for labeling. Coordinate labeling sessions before database maintenance.
+
+### Inspect without changing services
+
+Run these commands from an SSH shell on the Mini:
+
+```sh
+cd /Users/skylar/workspace/wash_cam
+git status --short
+git branch --show-current
+git log -3 --oneline
+launchctl list | rg 'com\.washcam\.'
+launchctl print "gui/$(id -u)/com.washcam.dashboard" | head -45
+launchctl print "gui/$(id -u)/com.washcam.watch" | head -45
+tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index} #{pane_current_command} #{pane_current_path}'
+ps -axo pid,ppid,etime,command | rg '[c]apture_loop.sh|[w]ash-cam'
+tail -10 tmp/capture.log
+tail -c 4000 tmp/logs/watch.log | tr '\r' '\n' | tail -20
+tail -20 tmp/logs/dashboard.log
+curl --fail --max-time 10 -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8000/
+curl --fail --max-time 10 -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8000/latest.jpg
+```
+
+Check the LAN URL from the client too. Local HTTP success does not prove LAN access.
+Check that capture timestamps advance across an interval and that the watcher stores new detections.
+A running process and an old image do not prove that capture works.
+Bound watcher log reads by bytes because model download progress can occupy one very long line.
+
+### Coordinate agents before deployment
+
+All agents share one server checkout, camera, database, and port. A Git push alone does not deploy code.
+Develop and run tests in separate local branches or worktrees. Integrate changes into `main` before deployment.
+Do not switch the live checkout to a feature branch or force-push shared history.
+Agree on one deployment owner and an exact target commit before changing the server.
+Include the purpose, affected services, and expected test window in the handoff.
+Other agents can develop and push during that window, but must not pull, edit, restart, or migrate the live server.
+
+The deployment owner must acquire this shared lock on the Mini before any mutation.
+The lock is a coordination convention for agents, not a service-enforced lock.
+Replace the owner text with an agent/session identifier, target SHA, and purpose:
+
+```sh
+# Acquire once. If mkdir fails, stop and contact the recorded owner.
+mkdir /Users/skylar/.wash-cam-deploy-lock &&
+  printf '%s\n' 'OWNER / TARGET_SHA / PURPOSE' "$(date -Iseconds)" > /Users/skylar/.wash-cam-deploy-lock/owner
+```
+
+If the directory exists, read its `owner` file and wait for the owner to finish.
+Do not overwrite the owner file after a failed `mkdir`.
+Do not remove a lock because it is old. Confirm that its owner has finished or explicitly handed it over.
+Hold the lock through deployment, hardware tests, recovery, and health checks.
+Read-only inspection does not require the lock. Camera tests and calibration require it and a paused capture loop.
+Record handoffs in `.agents/notes/` and share them through the active agent coordination channel.
+Notes alone do not provide mutual exclusion. Agents in separate sessions must check the server lock.
+
+### Pull and restart
+
+Run the project checks locally before pushing. Record the tested commit SHA.
+Acquire the server lock, inspect the checkout, and record its current SHA as the recovery reference.
+Stop if the checkout is dirty, on another branch, or contains unexpected commits. Coordinate with its owner.
+Do not stash another agent's work, run `git reset --hard`, or run `git clean` on the Mini.
+
+Fetch and select the agreed commit while services still run. Replace the placeholder before running:
+
+```sh
+cd /Users/skylar/workspace/wash_cam
+target_sha=REPLACE_WITH_FULL_TESTED_COMMIT_SHA
+git rev-parse HEAD
+git fetch origin
+git merge-base --is-ancestor HEAD "$target_sha"
+git merge-base --is-ancestor "$target_sha" origin/main
+git diff --stat HEAD "$target_sha"
+```
+
+Stop if either ancestry check fails. Review dependencies, migrations, and camera changes before proceeding.
+Pause capture before dependency updates or camera changes. See the capture procedure below.
+Pause labeling before database changes. Create a consistent backup with SQLite before migrations:
+
+```sh
+mkdir -p tmp/backups
+sqlite3 db/labels.sqlite3 ".backup 'tmp/backups/labels-$(date +%Y%m%d-%H%M%S).sqlite3'"
+```
+
+Stop managed services before changing files to prevent reloads during a partial update.
+Run each command separately and check its result. Stop on failure:
+
+```sh
+launchctl bootout "gui/$(id -u)/com.washcam.dashboard"
+launchctl bootout "gui/$(id -u)/com.washcam.watch"
+git merge --ff-only "$target_sha"
+uv sync --locked
+.venv/bin/wash-cam migrate
+launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.washcam.dashboard.plist"
+launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.washcam.watch.plist"
+git rev-parse HEAD
+```
+
+The fetch and fast-forward merge pull exactly the agreed revision, even if another agent pushes during testing.
+Use `scripts/install_services.sh` for initial installation or changed service definitions after synchronization.
+That script migrates the database and replaces both LaunchAgents. Do not run it for a single-service restart.
+For a restart without a code update, use the required service only:
+
+```sh
+launchctl kickstart -k "gui/$(id -u)/com.washcam.dashboard"
+launchctl kickstart -k "gui/$(id -u)/com.washcam.watch"
+```
+
+Use `bootout` for a deliberate stop. Killing a process alone lets `KeepAlive` restart it.
+Do not start another dashboard on port 8000 or another watcher beside the managed services.
+If deployment fails, retain ownership and report the failed step and service state.
+Coordinate a compatible recovery commit. Do not blindly downgrade code after a database migration or restore over newer labels.
+Restart any paused capture loop, then repeat the HTTP, log, capture, and detection checks.
+Record the previous SHA, deployed SHA, checks, service changes, and unresolved issues in the handoff.
+Release only your own lock after the test window ends and the handoff is complete:
+
+```sh
+rm /Users/skylar/.wash-cam-deploy-lock/owner
+rmdir /Users/skylar/.wash-cam-deploy-lock
+```
+
+### Manage the camera loop
+
+Inspect tmux panes and processes before selecting a target. Pane identifiers can change.
+At inspection, capture ran in `main:1.2`, alongside another agent in `main:1.1`.
+Do not send commands to an agent's pane or terminate the shared tmux session.
+With deployment ownership, attach using `ssh -t skylar@10.0.4.25 'tmux attach -t main'`.
+Select the confirmed capture pane and press Ctrl+C to stop its foreground loop.
+Verify that the loop and its current camera child have exited before hardware tests or dependency updates.
+
+Start the loop in the confirmed idle capture pane after maintenance:
+
+```sh
+cd /Users/skylar/workspace/wash_cam
+INTERVAL=30 DURATION=28800 LOG=tmp/capture.log ./scripts/capture_loop.sh
+```
+
+Preserve any previously agreed interval, duration, and log path when restarting.
+Detach with the tmux detach binding. Do not press Ctrl+C when you intend to leave capture running.
+Do not start duplicate loops or run manual camera/calibration commands during capture.
+Camera access depends on macOS privacy permissions for the launching process.
+If capture fails, inspect the log and the Mini's camera permissions instead of repeatedly restarting unrelated services.
+
 ## Testing
 
 Use pytest for unit tests. Run `uv sync --locked` to install the development dependencies.
