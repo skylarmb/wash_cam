@@ -11,7 +11,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 from contextlib import closing
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from html import escape
 from pathlib import Path
 
@@ -194,18 +194,18 @@ def session_revenue(session: Session) -> float:
 
 def revenue_totals(
     found: Sequence[Session],
-) -> tuple[dict[str, float], dict[int, float]]:
+) -> tuple[dict[date, float], dict[int, float]]:
     """Sum complete visits' revenue by local start day and by local start hour.
 
     Visits cut off by a gap or still open have unknown length, so they are left out.
     """
-    by_day: dict[str, float] = defaultdict(float)
+    by_day: dict[date, float] = defaultdict(float)
     by_hour: dict[int, float] = defaultdict(float)
     for session in found:
         if session.end_reason != "left":
             continue
         local = session.started_at.astimezone()
-        by_day[local.strftime("%a %Y-%m-%d")] += session_revenue(session)
+        by_day[local.date()] += session_revenue(session)
         by_hour[local.hour] += session_revenue(session)
     return dict(by_day), dict(by_hour)
 
@@ -230,11 +230,13 @@ def render_revenue(found: Sequence[Session]) -> str:
         )
         return f'<table class="revenue"><caption>{caption}</caption>{body}</table>'
 
+    # Sort by date first, then label, so weekday names never decide the order.
+    days = {day.strftime("%a %Y-%m-%d"): by_day[day] for day in sorted(by_day)}
     hours = {f"{hour:02d}:00": by_hour[hour] for hour in sorted(by_hour)}
     return (
         f"<h2>Estimated revenue</h2>{note}"
         f"<p><strong>${sum(by_day.values()):.2f}</strong> estimated in this range</p>"
-        f"{table('By day', dict(sorted(by_day.items())))}"
+        f"{table('By day', days)}"
         f"{table('By hour of day, all days', hours)}"
     )
 
