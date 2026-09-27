@@ -28,6 +28,28 @@ MIN_CALIBRATION_INLIERS = 50
 # keeps it pointed at the same part of the scene when the camera is re-seated.
 CAMERA_CROP_BOX = (390, 250, 1660, 590)
 
+# Floor quad of each wash bay as (x, y) corners, indexed left to right from 0 to
+# match the label bay IDs. Expressed in cropped-capture coordinates (the image
+# CAMERA_CROP_BOX produces), which calibration keeps fixed on the scene. A car
+# belongs to a bay when the bottom-center of its box, where its wheels meet the
+# ground, falls inside that bay's quad; this excludes cars queueing in the
+# foreground and cars parked behind the bays, whose boxes can still overlap it.
+# Review with `wash-cam bays` after any change.
+BAY_POLYGONS = (
+    ((145, 95), (268, 95), (268, 170), (85, 170)),
+    ((310, 95), (468, 95), (468, 175), (300, 175)),
+    ((485, 95), (648, 95), (655, 170), (480, 175)),
+    ((772, 95), (898, 95), (935, 172), (768, 172)),
+    ((965, 95), (1078, 95), (1135, 165), (962, 170)),
+)
+
+# A capture is night when more than NIGHT_DARK_FRACTION of its pixels are darker
+# than DARK_PIXEL_LEVEL (grayscale 0-255). Mean brightness cannot tell the two
+# apart, because auto-exposure lifts night frames to daytime levels. Tuned on
+# the first collection run: daytime frames had 22-33% dark pixels, night 41-100%.
+DARK_PIXEL_LEVEL = 25
+NIGHT_DARK_FRACTION = 0.38
+
 # Frames read and discarded before the one that gets saved. A cold camera needs
 # streaming time before auto-exposure converges: after the USB device powers
 # back up, captures ramped from near-black to correctly exposed over roughly

@@ -1,8 +1,9 @@
 """Parse CLI arguments and call the selected command."""
 
 import argparse
+from pathlib import Path
 
-from wash_cam import camera, dashboard, dummy
+from wash_cam import bays, camera, dashboard, dummy, evaluate
 from wash_cam.camera import calibrate
 
 
@@ -26,6 +27,32 @@ def main() -> None:
         help="Record the current view as a named reference (e.g. day, night).",
     )
     command.set_defaults(run=calibrate.run)
+    command = commands.add_parser(
+        "bays", help="Draw the bay regions on captures for review."
+    )
+    command.add_argument(
+        "images",
+        nargs="*",
+        type=Path,
+        help="Images to draw on. Defaults to every capture in images/.",
+    )
+    command.add_argument(
+        "--output",
+        type=Path,
+        default=bays.REVIEW_DIR,
+        help="Directory for the overlays. Defaults to tmp/bay_review/.",
+    )
+    command.set_defaults(run=bays.run)
+    command = commands.add_parser(
+        "evaluate", help="Score a vehicle-count model against verified labels."
+    )
+    command.add_argument(
+        "--model",
+        choices=sorted(evaluate.MODELS),
+        default="empty",
+        help="Model to score.",
+    )
+    command.set_defaults(run=evaluate.run)
     args = parser.parse_args()
     arguments = vars(args)
     arguments.pop("command", None)
