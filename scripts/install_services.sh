@@ -20,11 +20,14 @@ mkdir -p "$AGENTS" "$LOGS"
 "$CHECKOUT/.venv/bin/wash-cam" migrate
 
 # Map each service to its command. The capture loop exits after its DURATION;
-# KeepAlive starts the next run, so capture continues indefinitely.
+# KeepAlive starts the next run, so capture continues indefinitely. The loop
+# holds off sleep with caffeinate only while it runs, so the long-running
+# services also run under caffeinate: some service always keeps the server
+# awake, even in the moment between capture runs.
 for service in capture dashboard watch; do
   case "$service" in
     capture) arguments="<string>$CHECKOUT/scripts/capture_loop.sh</string>" ;;
-    *) arguments="<string>$CHECKOUT/.venv/bin/wash-cam</string><string>$service</string>" ;;
+    *) arguments="<string>/usr/bin/caffeinate</string><string>-ims</string><string>$CHECKOUT/.venv/bin/wash-cam</string><string>$service</string>" ;;
   esac
   label="com.washcam.$service"
   plist="$AGENTS/$label.plist"
