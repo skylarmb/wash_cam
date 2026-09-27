@@ -2,27 +2,41 @@
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const fs = require('node:fs');
-const direction = Number(process.argv[2]);
+const direction = process.argv[2];
+const keyboard = direction === "keyboard" || direction === "last_space";
+let focused;
 const outcome = process.argv[3];
 const events = [];
+let remembered = null;
 const links = ['previous', 'next'].map(name => ({
   href: `/labeling?image_path=${name}.jpg`,
+  addEventListener(type, callback) { this[type] = callback; }
+}));
+const inputs = (keyboard ? [0, 0, 0, 0, 0] : [2, 0, 1, 0, 3]).map(value => ({
+  value,
+  focus() { focused = this; },
+  stepUp() { this.value = Number(this.value) + 1; },
   addEventListener(type, callback) { this[type] = callback; }
 }));
 const elements = {
   labels: {
     reportValidity: () => outcome !== 'invalid',
-    querySelectorAll: () => [2, 0, 1, 0, 3].map(value => ({value})),
+    querySelectorAll: () => inputs,
     addEventListener(type, callback) { this[type] = callback; }
   },
   image_path: {value: 'capture.jpg'},
-  save: {disabled: false},
+  save: {disabled: false, focus() { focused = this; }},
   status: {textContent: ''}
 };
 const context = {
+  sessionStorage: {
+    getItem: () => remembered,
+    setItem(key, value) { remembered = value; }
+  },
   document: {
     getElementById: id => elements[id],
-    querySelectorAll: () => links
+    querySelectorAll: () => links,
+    querySelector: () => links[1]
   },
   window: {location: {assign: url => events.push(['navigate', url])}},
   fetch: async (url, options) => {
@@ -34,21 +48,41 @@ const context = {
 };
 vm.runInNewContext(fs.readFileSync(0, 'utf8'), context);
 (async () => {
-  assert.equal(typeof links[direction].click, 'function', 'Navigation must save before leaving');
   let prevented = false;
-  await links[direction].click({preventDefault() { prevented = true; }});
+  if (keyboard) {
+    assert.equal(focused, inputs[0], 'Focus Bay 0 on page load');
+    // Tab keeps native focus behavior. Space increments and advances focus.
+    const space = {key: ' ', preventDefault() {}};
+    if (direction === 'keyboard') {
+      inputs[2].focus();
+      await inputs[2].keydown(space);
+      assert.equal(focused, inputs[3]);
+      await inputs[3].keydown(space);
+      assert.equal(focused, inputs[4]);
+    } else {
+      inputs[4].focus();
+      await inputs[4].keydown(space);
+      assert.equal(focused, elements.save);
+    }
+    await elements.labels.submit({preventDefault() { prevented = true; }});
+  } else {
+    assert.equal(typeof links[direction].click, 'function', 'Navigation must save before leaving');
+    await links[direction].click({preventDefault() { prevented = true; }});
+  }
   assert.equal(prevented, true);
   if (outcome === 'invalid') {
     assert.deepEqual(events, []);
     return;
   }
   assert.deepEqual(events[0], ['save', '/api/labels', {
-    image_path: 'capture.jpg', counts: [2, 0, 1, 0, 3]
+    image_path: 'capture.jpg', counts: direction === 'keyboard' ? [0, 0, 1, 1, 0] : direction === 'last_space' ? [0, 0, 0, 0, 1] : [2, 0, 1, 0, 3]
   }]);
   if (outcome === 'success') {
-    assert.deepEqual(events[1], ['navigate', links[direction].href]);
+    assert.deepEqual(events[1], ['navigate', links[keyboard ? 1 : direction].href]);
+    assert.deepEqual(JSON.parse(remembered), events[0][2].counts);
   } else {
     assert.equal(events.length, 1);
+    assert.equal(remembered, null);
     assert.equal(elements.status.textContent, 'Save failed.');
   }
   assert.equal(elements.save.disabled, false);

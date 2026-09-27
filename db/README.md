@@ -26,7 +26,7 @@ SQLite does not check whether the image file exists.
 Use `vehicles.bays` for an array of bay entries.
 Give each entry a stable, unique `bay_id` within the image.
 Other fields remain flexible.
-The labeling interface saves `vehicle_count` for bays `bay_1` through `bay_5`.
+The labeling interface saves `vehicle_count` for bays `bay_0` through `bay_4`.
 A count of zero means the bay is empty.
 An omitted bay has not been labeled.
 
@@ -35,16 +35,16 @@ An omitted bay has not been labeled.
   "vehicles": {
     "bays": [
       {
-        "bay_id": "bay_1",
+        "bay_id": "bay_0",
         "vehicle_count": 2
       },
       {
-        "bay_id": "bay_2",
+        "bay_id": "bay_1",
         "vehicle_count": 0
       },
-      {"bay_id": "bay_3", "vehicle_count": 1},
-      {"bay_id": "bay_4", "vehicle_count": 0},
-      {"bay_id": "bay_5", "vehicle_count": 0}
+      {"bay_id": "bay_2", "vehicle_count": 1},
+      {"bay_id": "bay_3", "vehicle_count": 0},
+      {"bay_id": "bay_4", "vehicle_count": 0}
     ]
   }
 }
@@ -88,12 +88,19 @@ Send `POST /api/labels` with `Content-Type: application/json`:
 {"image_path": "capture.jpg", "counts": [2, 0, 1, 0, 0]}
 ```
 
-The five counts correspond to bays 1 through 5.
+The five counts correspond to bays 0 through 4.
 Each count must be a nonnegative integer.
 A successful request returns `{"saved": true}`.
 The API replaces the image's metadata with these counts and sets the current UTC verification time.
 Invalid counts return HTTP 400. Database failures return HTTP 503.
-The interface defaults unsaved bay counts to zero and requires all five values before saving.
+Only images without a database record inherit the last counts saved in this browser tab.
+Any stored metadata object blocks inheritance, including `{}` or null bay fields.
+Missing or invalid counts in stored metadata default to zero.
+The schema prohibits a null metadata column. An absent row is the API’s `null` state.
+A new browser tab, invalid session data, or unavailable session storage uses zero defaults.
+Inherited counts are suggestions until the user saves the image.
 Previous image and Next image save all five counts before navigation.
+Enter and the save button save the current image and open the next image. The last image wraps to the first.
+Bay 0 receives focus on load. Space increments the focused count and advances focus. Tab preserves the count.
 A failed save keeps the current image open.
 No schema migration is required for these metadata fields.

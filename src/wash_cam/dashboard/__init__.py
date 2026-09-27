@@ -40,7 +40,7 @@ def save_label(name, counts):
         "vehicles": {
             "bays": [
                 {"bay_id": f"bay_{i}", "vehicle_count": count}
-                for i, count in enumerate(counts, 1)
+                for i, count in enumerate(counts)
             ]
         }
     }
@@ -95,7 +95,7 @@ def labeling_page(names, name):
     saved = read_label(name)
     # Metadata stays flexible. Missing counts default to zero.
     counts = {}
-    if saved:
+    if saved is not None:
         vehicles = saved["metadata"].get("vehicles", {})
         bays = vehicles.get("bays", []) if isinstance(vehicles, dict) else []
         for bay in bays if isinstance(bays, list) else []:
@@ -110,7 +110,7 @@ def labeling_page(names, name):
         (-1, "Previous image", "← Previous image"),
         (1, "Next image", "Next image →"),
     ]:
-        target = position + offset
+        target = (position + 1) % len(names) if offset == 1 else position - 1
         if 0 <= target < len(names):
             link = escape(urlencode({"image_path": names[target]}), quote=True)
             steps.append(
@@ -129,7 +129,7 @@ def labeling_page(names, name):
     inputs = "".join(
         f'<label for="bay_{i}">Bay {i}<input id="bay_{i}" name="bay_{i}" '
         f'type="number" min="0" step="1" required value="{counts.get(f"bay_{i}", 0)}"></label>'
-        for i in range(1, 6)
+        for i in range(5)
     )
     query = escape(urlencode({"image_path": name}), quote=True)
     return page(
@@ -141,14 +141,44 @@ def labeling_page(names, name):
 <button type="submit">Load image</button></form>
 <p><img src="/image?{query}" alt="Selected capture for labeling"></p>
 <form id="labels"><fieldset><legend>Vehicle count per bay</legend>
+<p>Tab: next bay · Space: add one and next bay · Enter: save and next image</p>
 <div class="bays">{inputs}</div>
-<button id="save" type="submit">Save verified labels</button></fieldset></form>
+<button id="save" type="submit">Save verified labels and next image</button></fieldset></form>
 <p id="status" role="status">{"Saved labels loaded." if saved else "This image has no verified labels."}</p>
 <script>
 // Save the current capture before navigation. Keep it visible if saving fails.
 const form = document.getElementById('labels');
 const imagePath = document.getElementById('image_path').value;
 let saving = false;
+const nextImage = document.querySelector('a[aria-label="Next image"]');
+const bayInputs = Array.from(form.querySelectorAll('input'));
+// Existing metadata always wins, including empty objects and incomplete labels.
+const hasSavedMetadata = {json.dumps(saved is not None)};
+// Use a new key after the bay-index change and database reset.
+const previousCountsKey = 'wash-cam.previous-verified-counts-zero-indexed';
+if (!hasSavedMetadata) {{
+  try {{
+    const previous = JSON.parse(sessionStorage.getItem(previousCountsKey));
+    if (Array.isArray(previous) && previous.length === 5 &&
+        previous.every(count => Number.isSafeInteger(count) && count >= 0)) {{
+      bayInputs.forEach((input, index) => {{ input.value = previous[index]; }});
+      document.getElementById('status').textContent = 'Previous counts loaded. Verify this image before saving.';
+    }}
+  }} catch {{
+    // Missing, invalid, or unavailable session storage leaves the zero defaults.
+  }}
+}}
+// Keep Tab native. Space adds one vehicle and advances to the next control.
+bayInputs.forEach((input, index) => {{
+  input.addEventListener('keydown', event => {{
+    if (event.key !== ' ' || event.ctrlKey || event.altKey || event.metaKey) return;
+    event.preventDefault();
+    if (saving || event.repeat) return;
+    input.stepUp();
+    (bayInputs[index + 1] || document.getElementById('save')).focus();
+  }});
+}});
+bayInputs[0].focus();
 async function saveLabels(destination) {{
   if (saving || !form.reportValidity()) return;
   saving = true;
@@ -164,6 +194,8 @@ async function saveLabels(destination) {{
     }});
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Save failed.');
+    // Remember only confirmed saves. Storage failures must not block navigation.
+    try {{ sessionStorage.setItem(previousCountsKey, JSON.stringify(counts)); }} catch {{}}
     status.textContent = 'Verified labels saved.';
     if (destination) window.location.assign(destination);
   }} catch (error) {{
@@ -175,7 +207,7 @@ async function saveLabels(destination) {{
 }}
 form.addEventListener('submit', async (event) => {{
   event.preventDefault();
-  await saveLabels();
+  await saveLabels(nextImage.href);
 }});
 // Intercept both image links so each transition saves all five counts.
 document.querySelectorAll('a.image-step').forEach(link => {{

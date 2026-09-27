@@ -152,7 +152,7 @@ def test_labeling_loads_saved_counts_and_updates_one_image(request_dashboard):
     status, _, body = request_dashboard("/labeling?image_path=capture.jpg")
     assert status == "200 OK"
     assert b'http-equiv="refresh"' not in body
-    for bay, count in enumerate(payload["counts"], 1):
+    for bay, count in enumerate(payload["counts"]):
         assert (
             f'id="bay_{bay}" name="bay_{bay}" type="number" min="0" step="1" required value="{count}"'.encode()
             in body
@@ -169,7 +169,7 @@ def test_labeling_loads_saved_counts_and_updates_one_image(request_dashboard):
         "vehicles": {
             "bays": [
                 {"bay_id": f"bay_{i}", "vehicle_count": count}
-                for i, count in enumerate(payload["counts"], 1)
+                for i, count in enumerate(payload["counts"])
             ]
         }
     }
@@ -266,7 +266,7 @@ def test_missing_database_returns_error_without_creating_file(request_dashboard)
 
 
 def test_labeling_previous_and_next_images(request_dashboard):
-    """Navigate in capture order and disable navigation at either end."""
+    """Navigate in capture order and wrap the last image to the first."""
     dashboard.IMAGES_DIR.mkdir()
     for name in ("first.jpg", "middle.jpg", "last.jpg"):
         (dashboard.IMAGES_DIR / name).write_bytes(b"photo")
@@ -279,11 +279,11 @@ def test_labeling_previous_and_next_images(request_dashboard):
     first = request_dashboard("/labeling?image_path=first.jpg")[2]
     assert b'aria-label="Previous image" aria-disabled="true"' in first
     last = request_dashboard("/labeling?image_path=middle.jpg")[2]
-    assert b'aria-label="Next image" aria-disabled="true"' in last
+    assert b'aria-label="Next image" href="/labeling?image_path=first.jpg"' in last
     assert b"Image 2 of 3" in body
 
 
-@pytest.mark.parametrize("direction", [0, 1])
+@pytest.mark.parametrize("direction", [0, 1, "keyboard", "last_space"])
 @pytest.mark.parametrize("outcome", ["success", "error", "invalid"])
 def test_navigation_saves_before_leaving(request_dashboard, direction, outcome):
     """Run the page script and check save ordering and failed-save behavior."""
@@ -326,3 +326,43 @@ def test_dashboard_reloads_by_default(monkeypatch):
     assert (host, port, app) == ("127.0.0.1", 8000, dashboard.application)
     assert options["use_reloader"] is True
     assert options.get("use_debugger", False) is False
+
+
+@pytest.mark.parametrize(
+    ("metadata", "expected"),
+    [
+        (None, [2, 0, 1, 0, 3]),
+        ({}, [0] * 5),
+        ({"vehicles": None}, [0] * 5),
+        ({"vehicles": {"bays": [{"bay_id": "bay_0", "vehicle_count": None}]}}, [0] * 5),
+        ({"vehicles": {"bays": [{"bay_id": "bay_0", "vehicle_count": 0}]}}, [0] * 5),
+        (
+            {"vehicles": {"bays": [{"bay_id": "bay_0", "vehicle_count": 4}]}},
+            [4, 0, 0, 0, 0],
+        ),
+    ],
+)
+def test_inherits_counts_only_without_a_saved_record(
+    request_dashboard, metadata, expected
+):
+    """Preserve every stored object, including empty or incomplete metadata."""
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node is required for the dashboard script test")
+    dashboard.IMAGES_DIR.mkdir()
+    (dashboard.IMAGES_DIR / "capture.jpg").write_bytes(b"photo")
+    if metadata is not None:
+        with sqlite3.connect(dashboard.DATABASE_PATH) as db:
+            db.execute(
+                "INSERT INTO image_labels (image_path, metadata) VALUES (?, ?)",
+                ("capture.jpg", json.dumps(metadata)),
+            )
+    html = request_dashboard("/labeling")[2].decode()
+    result = subprocess.run(
+        [node, str(Path(__file__).with_name("dashboard_defaults.cjs"))],
+        input=json.dumps({"html": html, "expected": expected}),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
