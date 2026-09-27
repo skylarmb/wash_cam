@@ -192,19 +192,23 @@ if (!hasSavedMetadata) {{
         Object.keys(previous).length === bayInputs.length &&
         bayInputs.every(input => Number.isSafeInteger(previous[input.id]) && previous[input.id] >= 0)) {{
       bayInputs.forEach(input => {{ input.value = previous[input.id]; }});
-      document.getElementById('status').textContent = 'Previous counts loaded. Verify this image before saving.';
+      document.getElementById('status').textContent = 'Previous counts loaded. Verify this image, then press Save to keep them.';
     }}
   }} catch {{
     // Missing, invalid, or unavailable session storage leaves the zero defaults.
   }}
 }}
 // Keep Tab native. Space adds one vehicle and advances to the next control.
+// Only an edit or an explicit Save creates a label for an unlabeled image.
+let edited = false;
+bayInputs.forEach(input => input.addEventListener('input', () => {{ edited = true; }}));
 bayInputs.forEach((input, index) => {{
   input.addEventListener('keydown', event => {{
     if (event.key !== ' ' || event.ctrlKey || event.altKey || event.metaKey) return;
     event.preventDefault();
     if (saving || event.repeat) return;
     input.stepUp();
+    edited = true;
     (bayInputs[index + 1] || document.getElementById('save')).focus();
   }});
 }});
@@ -239,10 +243,15 @@ form.addEventListener('submit', async (event) => {{
   event.preventDefault();
   await saveLabels(nextImage.href);
 }});
-// Intercept both image links so each transition saves every bay count.
+// Intercept both image links so each transition saves every bay count, except
+// when browsing past an unlabeled image that nobody edited.
 document.querySelectorAll('a.image-step').forEach(link => {{
   link.addEventListener('click', async (event) => {{
     event.preventDefault();
+    if (!hasSavedMetadata && !edited) {{
+      window.location.assign(link.href);
+      return;
+    }}
     await saveLabels(link.href);
   }});
 }});
