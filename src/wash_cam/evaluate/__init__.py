@@ -19,6 +19,7 @@ from wash_cam.config import (
     NIGHT_DARK_FRACTION,
 )
 from wash_cam.detect import VehicleDetector
+from wash_cam.session_eval import LABEL_SOURCES
 
 __all__ = [
     "MODELS",
@@ -80,14 +81,17 @@ def is_night(image: np.ndarray) -> bool:
     return float((gray < DARK_PIXEL_LEVEL).mean()) > NIGHT_DARK_FRACTION
 
 
-def load_labels(database: Path) -> dict[str, Counts]:
-    """Return per-bay counts for every verified image, keyed by image path.
+def load_labels(database: Path, labels: str = "agent") -> dict[str, Counts]:
+    """Return per-bay counts for every image labeled by the given source ("agent" or "human").
 
     Entries with an unknown bay ID or a missing count are left out rather
     than guessed, so they are not scored.
     """
     with closing(sqlite3.connect(f"{database.as_uri()}?mode=ro", uri=True)) as db:
-        rows = db.execute("SELECT image_path, metadata FROM image_labels").fetchall()
+        rows = db.execute(
+            f"SELECT image_path, metadata FROM image_labels AS l "
+            f"WHERE {LABEL_SOURCES[labels]}"
+        ).fetchall()
 
     labels: dict[str, Counts] = {}
     for image_path, metadata in rows:
@@ -122,14 +126,16 @@ def score(labels: list[Counts], predictions: list[Counts]) -> Score:
     )
 
 
-def evaluate(predictor: Predictor, database: Path, images: Path) -> dict[str, Score]:
+def evaluate(
+    predictor: Predictor, database: Path, images: Path, labels: str = "agent"
+) -> dict[str, Score]:
     """Score a predictor on every labeled image, overall and split by day and night."""
     groups: dict[str, tuple[list[Counts], list[Counts]]] = {
         "all": ([], []),
         "day": ([], []),
         "night": ([], []),
     }
-    for image_path, labeled in sorted(load_labels(database).items()):
+    for image_path, labeled in sorted(load_labels(database, labels).items()):
         # cv2.imread returns None for a missing or unreadable file.
         image = cv2.imread(str(images / image_path))
         if image is None:
@@ -141,10 +147,10 @@ def evaluate(predictor: Predictor, database: Path, images: Path) -> dict[str, Sc
     return {name: score(*pair) for name, pair in groups.items()}
 
 
-def run(model: str) -> None:
+def run(model: str, labels: str = "agent") -> None:
     """Score the named model against the labels database and print a report."""
-    scores = evaluate(MODELS[model](), DATABASE_PATH, IMAGES_DIR)
-    print(f"Model: {model}")
+    scores = evaluate(MODELS[model](), DATABASE_PATH, IMAGES_DIR, labels)
+    print(f"Model: {model}, scored against {labels} labels")
     print(
         f"{'group':<6} {'images':>6} {'bays':>5} {'bay acc':>8} {'image acc':>9} {'MAE':>6}"
     )

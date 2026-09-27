@@ -11,12 +11,23 @@ from wash_cam import (
     detect,
     dummy,
     evaluate,
+    labeling,
     session_eval,
     sessions,
     watch,
 )
 from wash_cam.camera import calibrate
 from wash_cam.config import DATABASE_PATH
+
+
+def add_labels_option(command: argparse.ArgumentParser) -> None:
+    """Let a scoring command choose agent or human labels as its reference."""
+    command.add_argument(
+        "--labels",
+        choices=sorted(session_eval.LABEL_SOURCES),
+        default="agent",
+        help="Score against agent labels (default) or human labels.",
+    )
 
 
 def main() -> None:
@@ -64,6 +75,7 @@ def main() -> None:
         default="empty",
         help="Model to score.",
     )
+    add_labels_option(command)
     command.set_defaults(run=evaluate.run)
     command = commands.add_parser(
         "detect", help="Count vehicles per bay and save review overlays."
@@ -116,7 +128,25 @@ def main() -> None:
         dest="close_frames",
         help="Empty frames in a row that close a predicted session.",
     )
+    add_labels_option(command)
     command.set_defaults(run=session_eval.run)
+    command = commands.add_parser(
+        "label-export",
+        help="Export captures in a local time window as a batch for a labeling agent.",
+    )
+    command.add_argument(
+        "--start", required=True, help="Local time, e.g. '2026-09-27 12:00'."
+    )
+    command.add_argument("--end", required=True, help="Local time, exclusive.")
+    command.add_argument(
+        "--every", type=int, default=1, help="Keep every Nth frame (default: all)."
+    )
+    command.set_defaults(run=labeling.run_export)
+    command = commands.add_parser(
+        "label-import", help="Import a labeling agent's labels.jsonl into the database."
+    )
+    command.add_argument("path", type=Path, help="The batch's labels.jsonl file.")
+    command.set_defaults(run=labeling.run_import)
     args = parser.parse_args()
     arguments = vars(args)
     arguments.pop("command", None)
