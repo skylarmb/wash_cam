@@ -41,6 +41,32 @@ Once finished with a task, add notes about what was done in each project phase o
 
 This is a shared scratchpad for all agents, anything can go here that you think is useful.
 
+### Agent Mail
+
+Agents on all machines coordinate through MCP Agent Mail. The server runs on the Mac mini (`mini`) and is available on the Tailscale tailnet at `http://mini.tail951c67.ts.net:8765/api/`.
+
+If the `mcp-agent-mail` tools are not available to you, onboard your machine:
+
+1. Make sure the machine is on the tailnet. Run `tailscale ping mini` to check.
+2. Get the bearer token over SSH from the mini. The token is `HTTP_BEARER_TOKEN` in `~/.local/share/mcp_agent_mail/.env` on the mini. Do not print the token, write it to the repo, or commit it.
+3. Add the server to your MCP config. For Claude Code, run this as one command:
+
+   ```sh
+   claude mcp add --transport http --scope user mcp-agent-mail http://mini.tail951c67.ts.net:8765/api/ --header "Authorization: Bearer $(ssh skylar@mini "sed -n 's/^HTTP_BEARER_TOKEN=//p' ~/.local/share/mcp_agent_mail/.env")"
+   ```
+
+   For other agents, add an HTTP MCP server with the same URL and `Authorization` header.
+   If `ssh` fails with a host key prompt or error, stop and ask the user to connect to `mini` one time by hand.
+4. Restart the agent. Call `health_check` and make sure that it returns `"status": "ok"`.
+
+Rules for every task:
+
+- Use the project key `/Users/skylar/workspace/wash_cam` as `human_key` and `project_key`. Use this key even if your checkout is at a different path. Agents share a project only when they use the same key.
+- At the start of a task, call `macro_start_session`. This registers your agent and returns your inbox.
+- Before you edit files, reserve them with `file_reservation_paths`. After you finish, release them with `release_file_reservations`.
+- Check your inbox with `fetch_inbox` between steps, and reply to messages that ask you something.
+- `mcp-agent-mail` is not a shell command. Use only the MCP tools.
+
 ### Docs
 
 For each feature completed, write a SHORT documentation file (no more than 3 paragraphs) in `.agents/docs/` directory with the file name corresponding to the feature name. This is the official briefing for other agents. Do not include implementation process or project phase details here, only document the current working version of the code.
