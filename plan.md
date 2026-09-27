@@ -67,7 +67,7 @@ agents which migration number you take before you write it.
 | 3. Step 7: nightly backups | `scripts/backup_db.sh`, one entry in `scripts/install_services.sh` | SilentIsland |
 | 4. Step 6: Analytics tab without revenue (heatmap, utilization, durations) | `src/wash_cam/dashboard/analytics.py` and its tests, route registration in `dashboard/__init__.py` | SilentIsland (rebuild from the approved design) |
 | Step 5: threshold tuning (after labels are imported) | `src/wash_cam/sessions.py` | SilentIsland |
-| Step 4 and revenue in step 6 (blocked on pricing) | a new revenue module | Later, probably SapphireCompass |
+| Step 4 and revenue in step 6 (pricing known) | `config.py` pricing, a revenue function, the Analytics tab | SilentIsland (after the analytics deploy) |
 | Coordination: `plan.md` status and `AGENTS.md` | `plan.md`, `AGENTS.md` | ScarletEagle |
 | QA: correctness, validation, simplicity, and scope reviews | review findings only | StormyCliff |
 
@@ -160,7 +160,10 @@ agents which migration number you take before you write it.
 
 ### Step 4: Revenue model
 
-- [ ] Wait for pricing from the user:
+- [x] Wait for pricing from the user. Skylar gave it on 2026-09-27: wash
+  bays cost $1 per minute with a $3 minimum per session, and the vacuum costs
+  $0.25 per minute (a placeholder). No owner totals exist, so revenue is a
+  rough estimate. The original questions were:
   - the per-minute price
   - any starting price or minimum purchase
   - the rounding increment
@@ -222,6 +225,3 @@ agents which migration number you take before you write it.
   mini's screen.
 
 ## Open questions
-
-- What is the pricing structure, for the wash bays and for the vacuum?
-- Can the owner share actual daily revenue totals?
