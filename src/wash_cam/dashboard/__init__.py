@@ -1,56 +1,276 @@
-"""Serve the latest camera capture on a local web page."""
+"""Serve camera captures and save verified vehicle counts."""
 
+import json
+import sqlite3
+from contextlib import closing
+from html import escape
 from pathlib import Path
+from urllib.parse import parse_qs, urlencode
 from wsgiref import simple_server
 
-# Read shared images from the checkout, regardless of the working directory.
-IMAGES_DIR = Path(__file__).resolve().parents[3] / "images"
+# Resolve shared files from the checkout, regardless of the working directory.
+ROOT = Path(__file__).resolve().parents[3]
+IMAGES_DIR = ROOT / "images"
+DATABASE_PATH = ROOT / "db" / "labels.sqlite3"
+
+
+def image_names():
+    """List captures in timestamp order and exclude external symlinks."""
+    return sorted(
+        image.name
+        for image in IMAGES_DIR.glob("*.jpg")
+        if image.is_file() and image.resolve().parent == IMAGES_DIR.resolve()
+    )
+
+
+def read_label(name):
+    """Read the current verified record without creating a missing database."""
+    with closing(sqlite3.connect(f"{DATABASE_PATH.as_uri()}?mode=rw", uri=True)) as db:
+        row = db.execute(
+            "SELECT metadata, verified_at FROM image_labels WHERE image_path = ?",
+            (name,),
+        ).fetchone()
+    return {"metadata": json.loads(row[0]), "verified_at": row[1]} if row else None
+
+
+def save_label(name, counts):
+    """Replace all five bay counts and update the verification time atomically."""
+    metadata = {
+        "vehicles": {
+            "bays": [
+                {"bay_id": f"bay_{i}", "vehicle_count": count}
+                for i, count in enumerate(counts, 1)
+            ]
+        }
+    }
+    with (
+        closing(sqlite3.connect(f"{DATABASE_PATH.as_uri()}?mode=rw", uri=True)) as db,
+        db,
+    ):
+        db.execute(
+            "INSERT INTO image_labels (image_path, metadata) VALUES (?, ?) "
+            "ON CONFLICT(image_path) DO UPDATE SET metadata = excluded.metadata, "
+            "verified_at = CURRENT_TIMESTAMP",
+            (name, json.dumps(metadata)),
+        )
+
+
+def page(content, labeling=False):
+    """Render navigation tabs and refresh only the live page."""
+    refresh = "" if labeling else '<meta http-equiv="refresh" content="30">'
+    live_current = "" if labeling else ' aria-current="page"'
+    labels_current = ' aria-current="page"' if labeling else ""
+    return f'''<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{refresh}<title>Wash Cam</title>
+<style>
+body {{ font-family: sans-serif; margin: 1rem auto; padding: 0 1rem; max-width: 1000px; }}
+img {{ max-width: 100%; height: auto; }}
+nav {{ display: flex; gap: 1rem; border-bottom: 1px solid #aaa; margin-bottom: 1rem; }}
+nav a {{ padding: .75rem; color: #234; text-decoration: none; }}
+nav a[aria-current] {{ border-bottom: 3px solid #267; font-weight: bold; }}
+.bays {{ display: flex; flex-wrap: wrap; gap: 1rem; margin: 1rem 0; }}
+.bays label {{ display: grid; gap: .4rem; }}
+input {{ width: 6rem; }}
+input, select, button {{ font: inherit; padding: .5rem; }}
+select {{ max-width: 100%; }}
+.image-controls {{ display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin: 1rem 0; }}
+.image-step {{ display: inline-block; padding: .65rem 1rem; border: 1px solid #267;
+  border-radius: .4rem; background: #f0f7f8; color: #234; text-decoration: none; font-weight: bold; }}
+.image-step:hover {{ background: #dceef0; }}
+.image-step:focus-visible {{ outline: 3px solid #267; outline-offset: 3px; }}
+.image-step[aria-disabled] {{ color: #777; border-color: #ccc; background: #f4f4f4; }}
+</style></head><body><h1>Wash Cam</h1>
+<nav aria-label="Dashboard"><a href="/"{live_current}>Live view</a>
+<a href="/labeling"{labels_current}>Data labeling</a></nav>
+{content}</body></html>'''.encode()
+
+
+def labeling_page(names, name):
+    """Fill inputs from the selected image's saved bay counts."""
+    if not names:
+        return page("<p>No images yet</p>", labeling=True)
+    saved = read_label(name)
+    # Metadata stays flexible. Missing counts default to zero.
+    counts = {}
+    if saved:
+        vehicles = saved["metadata"].get("vehicles", {})
+        bays = vehicles.get("bays", []) if isinstance(vehicles, dict) else []
+        for bay in bays if isinstance(bays, list) else []:
+            if isinstance(bay, dict) and isinstance(bay.get("bay_id"), str):
+                count = bay.get("vehicle_count")
+                if type(count) is int and count >= 0:
+                    counts[bay["bay_id"]] = count
+    # Adjacent captures follow timestamp filename order.
+    position = names.index(name)
+    steps = []
+    for offset, label, text in [
+        (-1, "Previous image", "← Previous image"),
+        (1, "Next image", "Next image →"),
+    ]:
+        target = position + offset
+        if 0 <= target < len(names):
+            link = escape(urlencode({"image_path": names[target]}), quote=True)
+            steps.append(
+                f'<a class="image-step" aria-label="{label}" href="/labeling?{link}">{text}</a>'
+            )
+        else:
+            steps.append(
+                f'<span class="image-step" role="link" aria-label="{label}" aria-disabled="true">{text}</span>'
+            )
+    navigation = f'<div class="image-controls">{steps[0]}<span>Image {position + 1} of {len(names)}</span>{steps[1]}</div>'
+    options = "".join(
+        f'<option value="{escape(item, quote=True)}"'
+        f"{' selected' if item == name else ''}>{escape(item)}</option>"
+        for item in reversed(names)
+    )
+    inputs = "".join(
+        f'<label for="bay_{i}">Bay {i}<input id="bay_{i}" name="bay_{i}" '
+        f'type="number" min="0" step="1" required value="{counts.get(f"bay_{i}", 0)}"></label>'
+        for i in range(1, 6)
+    )
+    query = escape(urlencode({"image_path": name}), quote=True)
+    return page(
+        f"""
+{navigation}
+<form method="get" action="/labeling">
+<label for="image_path">Image</label>
+<select id="image_path" name="image_path" onchange="this.form.submit()">{options}</select>
+<button type="submit">Load image</button></form>
+<p><img src="/image?{query}" alt="Selected capture for labeling"></p>
+<form id="labels"><fieldset><legend>Vehicle count per bay</legend>
+<div class="bays">{inputs}</div>
+<button id="save" type="submit">Save verified labels</button></fieldset></form>
+<p id="status" role="status">{"Saved labels loaded." if saved else "This image has no verified labels."}</p>
+<script>
+// Save the current capture before navigation. Keep it visible if saving fails.
+const form = document.getElementById('labels');
+const imagePath = document.getElementById('image_path').value;
+let saving = false;
+async function saveLabels(destination) {{
+  if (saving || !form.reportValidity()) return;
+  saving = true;
+  const status = document.getElementById('status');
+  const button = document.getElementById('save');
+  const counts = Array.from(form.querySelectorAll('input'), input => Number(input.value));
+  button.disabled = true;
+  status.textContent = 'Saving…';
+  try {{
+    const response = await fetch('/api/labels', {{
+      method: 'POST', headers: {{'Content-Type': 'application/json'}},
+      body: JSON.stringify({{image_path: imagePath, counts}})
+    }});
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Save failed.');
+    status.textContent = 'Verified labels saved.';
+    if (destination) window.location.assign(destination);
+  }} catch (error) {{
+    status.textContent = error.message;
+  }} finally {{
+    button.disabled = false;
+    saving = false;
+  }}
+}}
+form.addEventListener('submit', async (event) => {{
+  event.preventDefault();
+  await saveLabels();
+}});
+// Intercept both image links so each transition saves all five counts.
+document.querySelectorAll('a.image-step').forEach(link => {{
+  link.addEventListener('click', async (event) => {{
+    event.preventDefault();
+    await saveLabels(link.href);
+  }});
+}});
+</script>""",
+        labeling=True,
+    )
+
+
+def route(environ):
+    """Handle page, image, and JSON requests."""
+    path = environ.get("PATH_INFO", "/")
+    method = environ.get("REQUEST_METHOD", "GET")
+    names = image_names()
+    name = parse_qs(environ.get("QUERY_STRING", "")).get("image_path", [None])[0]
+    if method == "POST" and path == "/api/labels":
+        if environ.get("CONTENT_TYPE", "").split(";")[0] != "application/json":
+            return (
+                "415 Unsupported Media Type",
+                "application/json",
+                b'{"error":"Use application/json."}',
+            )
+        try:
+            size = int(environ.get("CONTENT_LENGTH", "0"))
+            if not 0 < size <= 8192:
+                raise ValueError
+            payload = json.loads(environ["wsgi.input"].read(size))
+            if not isinstance(payload, dict):
+                raise TypeError
+            name, counts = payload.get("image_path"), payload.get("counts")
+            if (
+                not isinstance(counts, list)
+                or len(counts) != 5
+                or any(type(count) is not int or count < 0 for count in counts)
+            ):
+                raise ValueError
+        except (ValueError, TypeError, UnicodeError):
+            return (
+                "400 Bad Request",
+                "application/json",
+                b'{"error":"Provide five nonnegative whole-number counts."}',
+            )
+        if name not in names:
+            return "404 Not Found", "application/json", b'{"error":"Image not found."}'
+        save_label(name, counts)
+        return "200 OK", "application/json", b'{"saved":true}'
+    if method != "GET":
+        return (
+            "405 Method Not Allowed",
+            "application/json",
+            b'{"error":"Method not allowed."}',
+        )
+    if path == "/":
+        content = (
+            '<img src="/latest.jpg" alt="Latest wash cam capture">'
+            if names
+            else "<p>No images yet</p>"
+        )
+        return "200 OK", "text/html; charset=utf-8", page(content)
+    if path == "/labeling":
+        if name is not None and name not in names:
+            return "404 Not Found", "text/plain", b"Image not found"
+        return (
+            "200 OK",
+            "text/html; charset=utf-8",
+            labeling_page(names, name or (names[-1] if names else None)),
+        )
+    if path == "/latest.jpg":
+        name = names[-1] if names else None
+    if path in ("/latest.jpg", "/image") and name in names:
+        return "200 OK", "image/jpeg", (IMAGES_DIR / name).read_bytes()
+    if path == "/api/labels" and name in names:
+        return "200 OK", "application/json", json.dumps(read_label(name)).encode()
+    return "404 Not Found", "application/json", b'{"error":"Not found."}'
 
 
 def application(environ, start_response):
-    """Serve the page or the latest JPEG without browser caching."""
-    status, content_type, body = (
-        "404 Not Found",
-        "text/plain; charset=utf-8",
-        b"Not found",
-    )
-    path = environ.get("PATH_INFO", "/")
-    if path in ("/", "/latest.jpg"):
-        # Timestamp filenames sort in capture order, even if file times change.
-        latest = max(
-            (image for image in IMAGES_DIR.glob("*.jpg") if image.is_file()),
-            key=lambda image: image.name,
-            default=None,
+    """Serve responses without caching and report unavailable storage."""
+    try:
+        status, content_type, body = route(environ)
+    except FileNotFoundError:
+        status, content_type, body = (
+            "404 Not Found",
+            "application/json",
+            b'{"error":"Image not found."}',
         )
-        if path == "/":
-            content = (
-                '<img src="/latest.jpg" alt="Latest wash cam capture">'
-                if latest is not None
-                else "<p>No images yet</p>"
-            )
-            body = f"""<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="refresh" content="30">
-<title>Wash Cam</title>
-<style>body {{ font-family: sans-serif; margin: 1rem; }}
-img {{ max-width: 100%; height: auto; }}</style>
-</head>
-<body><h1>Wash Cam</h1>{content}</body>
-</html>
-""".encode()
-            status, content_type = "200 OK", "text/html; charset=utf-8"
-        elif latest is not None:
-            try:
-                body = latest.read_bytes()
-            except FileNotFoundError:
-                # A removed capture can be replaced on the next page refresh.
-                pass
-            else:
-                status, content_type = "200 OK", "image/jpeg"
-
+    except sqlite3.Error:
+        status, content_type, body = (
+            "503 Service Unavailable",
+            "application/json",
+            b'{"error":"Label database is unavailable. Try again."}',
+        )
     start_response(
         status,
         [

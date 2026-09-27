@@ -1,7 +1,7 @@
 # Dashboard
 
-Run `uv run wash-cam dashboard` and open http://127.0.0.1:8000 on the same computer. Press Ctrl+C to stop the server.
+Run `uv run wash-cam dashboard` and open http://127.0.0.1:8000 on the same computer. Press Ctrl+C to stop the server. The Live view tab at `/` reloads every 30 seconds. It shows the JPEG with the latest timestamp filename from `images/`. A missing or empty directory shows `No images yet`.
 
-The page reloads every 30 seconds. It shows the JPEG with the latest timestamp filename from the checkout's `images/` directory. The same image stays visible until a newer capture appears. A missing or empty directory shows `No images yet`.
+The Data labeling tab at `/labeling` selects an image and loads its saved counts into five bay inputs. Previous image and Next image move through timestamp filename order. Both buttons save the current counts before navigation. Failed saves keep the current image open. The dropdown remains available. Navigation is disabled at either end. Unsaved bay counts default to zero. The page does not refresh automatically. Save verified labels writes all five nonnegative integer counts to `db/labels.sqlite3`. Each save replaces that image's metadata and updates its verification time.
 
-The standard-library WSGI server serves the page at `/` and the latest image at `/latest.jpg`. Responses disable browser caching. Other routes return 404. The dashboard does not capture images or require new dependencies.
+The standard-library WSGI server serves `/latest.jpg` and selected captures at `/image?image_path=<filename>`. `GET /api/labels?image_path=<filename>` returns saved metadata and verification time, or `null`. `POST /api/labels` accepts JSON with `image_path` and a five-element `counts` array. Responses disable browser caching. Image routes accept only existing JPEGs directly inside `images/`. The server closes each database connection after use. The dashboard does not capture images or require new dependencies.

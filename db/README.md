@@ -18,7 +18,7 @@ Commit and push the database before another developer starts labeling.
 Verification covers all labels for an image at once.
 An absent row means no verified labels have been saved.
 The table stores the current labels without revision history.
-Future updates must set `verified_at` to the new verification time.
+Updates must set `verified_at` to the new verification time.
 SQLite does not check whether the image file exists.
 
 ## Metadata convention
@@ -26,7 +26,8 @@ SQLite does not check whether the image file exists.
 Use `vehicles.bays` for an array of bay entries.
 Give each entry a stable, unique `bay_id` within the image.
 Other fields remain flexible.
-An empty bay has `vehicle_present: false`.
+The labeling interface saves `vehicle_count` for bays `bay_1` through `bay_5`.
+A count of zero means the bay is empty.
 An omitted bay has not been labeled.
 
 ```json
@@ -35,17 +36,17 @@ An omitted bay has not been labeled.
     "bays": [
       {
         "bay_id": "bay_1",
-        "vehicle_present": true,
-        "vehicle_type": "sedan",
-        "color": "white"
+        "vehicle_count": 2
       },
       {
         "bay_id": "bay_2",
-        "vehicle_present": false
-      }
+        "vehicle_count": 0
+      },
+      {"bay_id": "bay_3", "vehicle_count": 1},
+      {"bay_id": "bay_4", "vehicle_count": 0},
+      {"bay_id": "bay_5", "vehicle_count": 0}
     ]
-  },
-  "model": "classifier-v1"
+  }
 }
 ```
 
@@ -66,10 +67,33 @@ sqlite3 -bail db/labels.sqlite3 < db/migrations/001_image_labels.sql
 The migration creates the table and sets `PRAGMA user_version` to `1` in one transaction.
 The command fails if the table already exists.
 Apply each numbered migration once, in order.
-There is no migration runner or application input interface yet.
+There is no migration runner.
 
 Check the database version and integrity:
 
 ```sh
 sqlite3 db/labels.sqlite3 'PRAGMA user_version; PRAGMA integrity_check;'
 ```
+
+## Labeling API
+
+The dashboard serves `GET /api/labels?image_path=<filename>`.
+It returns `null` for an unverified image or an object with `metadata` and `verified_at`.
+Unknown images return HTTP 404.
+The dashboard lists JPEG files directly inside `images/`.
+
+Send `POST /api/labels` with `Content-Type: application/json`:
+
+```json
+{"image_path": "capture.jpg", "counts": [2, 0, 1, 0, 0]}
+```
+
+The five counts correspond to bays 1 through 5.
+Each count must be a nonnegative integer.
+A successful request returns `{"saved": true}`.
+The API replaces the image's metadata with these counts and sets the current UTC verification time.
+Invalid counts return HTTP 400. Database failures return HTTP 503.
+The interface defaults unsaved bay counts to zero and requires all five values before saving.
+Previous image and Next image save all five counts before navigation.
+A failed save keeps the current image open.
+No schema migration is required for these metadata fields.

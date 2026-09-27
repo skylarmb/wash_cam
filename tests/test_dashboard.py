@@ -1,9 +1,15 @@
 """Check dashboard responses without sockets or camera hardware."""
 
+import io
+import json
+import shutil
+import sqlite3
+import subprocess
 import sys
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import urlsplit
 from wsgiref import simple_server
 from wsgiref.util import setup_testing_defaults
 
@@ -34,6 +40,15 @@ def test_serves_committed_images_from_any_working_directory(monkeypatch, tmp_pat
 def request_dashboard(monkeypatch, tmp_path, capsys):
     """Start the CLI with a fake server and call its WSGI application."""
     applications = []
+    database = tmp_path / "labels.sqlite3"
+    with sqlite3.connect(database) as connection:
+        connection.executescript(
+            (
+                Path(__file__).resolve().parents[1]
+                / "db/migrations/001_image_labels.sql"
+            ).read_text()
+        )
+    monkeypatch.setattr(dashboard, "DATABASE_PATH", database, raising=False)
 
     @contextmanager
     def make_server(host, port, app):
@@ -48,11 +63,18 @@ def request_dashboard(monkeypatch, tmp_path, capsys):
     main()
     assert "http://127.0.0.1:8000" in capsys.readouterr().out
 
-    def request(path):
+    def request(path, method="GET", payload=None):
         """Return the status, headers, and body for a GET request."""
         environ = {}
         setup_testing_defaults(environ)
-        environ["PATH_INFO"] = path
+        url = urlsplit(path)
+        environ["PATH_INFO"] = url.path
+        environ["QUERY_STRING"] = url.query
+        environ["REQUEST_METHOD"] = method
+        data = json.dumps(payload).encode() if payload is not None else b""
+        environ["wsgi.input"] = io.BytesIO(data)
+        environ["CONTENT_LENGTH"] = str(len(data))
+        environ["CONTENT_TYPE"] = "application/json"
         response = {}
 
         def start_response(status, headers):
@@ -121,3 +143,170 @@ def test_no_images_then_first_capture(request_dashboard, directory_exists):
 def test_unknown_routes_return_404(request_dashboard, path):
     """Do not serve other files from the checkout."""
     assert request_dashboard(path)[0] == "404 Not Found"
+
+
+def test_labeling_loads_saved_counts_and_updates_one_image(request_dashboard):
+    """Save all bays, load their inputs, and replace the verified record."""
+    dashboard.IMAGES_DIR.mkdir()
+    (dashboard.IMAGES_DIR / "capture.jpg").write_bytes(b"selected photo")
+    payload = {"image_path": "capture.jpg", "counts": [2, 0, 1, 0, 3]}
+    assert request_dashboard("/api/labels?image_path=capture.jpg")[2] == b"null"
+    assert request_dashboard("/api/labels", "POST", payload)[0] == "200 OK"
+    status, _, body = request_dashboard("/labeling?image_path=capture.jpg")
+    assert status == "200 OK"
+    assert b'http-equiv="refresh"' not in body
+    for bay, count in enumerate(payload["counts"], 1):
+        assert (
+            f'id="bay_{bay}" name="bay_{bay}" type="number" min="0" step="1" required value="{count}"'.encode()
+            in body
+        )
+    assert request_dashboard("/image?image_path=capture.jpg")[2] == b"selected photo"
+    with sqlite3.connect(dashboard.DATABASE_PATH) as connection:
+        connection.execute(
+            "UPDATE image_labels SET verified_at = '2000-01-01 00:00:00'"
+        )
+    payload["counts"] = [0, 1, 2, 3, 4]
+    assert request_dashboard("/api/labels", "POST", payload)[0] == "200 OK"
+    saved = json.loads(request_dashboard("/api/labels?image_path=capture.jpg")[2])
+    assert saved["metadata"] == {
+        "vehicles": {
+            "bays": [
+                {"bay_id": f"bay_{i}", "vehicle_count": count}
+                for i, count in enumerate(payload["counts"], 1)
+            ]
+        }
+    }
+    assert saved["verified_at"] > "2000-01-01 00:00:00"
+    with sqlite3.connect(dashboard.DATABASE_PATH) as connection:
+        assert (
+            connection.execute("SELECT count(*) FROM image_labels").fetchone()[0] == 1
+        )
+
+
+@pytest.mark.parametrize(
+    "counts",
+    [
+        [0] * 4,
+        [0] * 6,
+        [-1, 0, 0, 0, 0],
+        [True, 0, 0, 0, 0],
+        [1.5, 0, 0, 0, 0],
+        ["1", 0, 0, 0, 0],
+        None,
+    ],
+)
+def test_rejects_invalid_counts(request_dashboard, counts):
+    """Reject incomplete or invalid counts without writing a record."""
+    dashboard.IMAGES_DIR.mkdir()
+    (dashboard.IMAGES_DIR / "capture.jpg").write_bytes(b"photo")
+    assert (
+        request_dashboard(
+            "/api/labels", "POST", {"image_path": "capture.jpg", "counts": counts}
+        )[0]
+        == "400 Bad Request"
+    )
+    with sqlite3.connect(dashboard.DATABASE_PATH) as connection:
+        assert (
+            connection.execute("SELECT count(*) FROM image_labels").fetchone()[0] == 0
+        )
+
+
+@pytest.mark.parametrize("name", ["missing.jpg", "../secret.jpg", "/tmp/secret.jpg"])
+def test_rejects_unknown_images(request_dashboard, name):
+    """Restrict labels and image reads to available captures."""
+    assert (
+        request_dashboard(
+            "/api/labels", "POST", {"image_path": name, "counts": [0] * 5}
+        )[0]
+        == "404 Not Found"
+    )
+    assert request_dashboard(f"/image?image_path={name}")[0] == "404 Not Found"
+
+
+def test_labeling_empty_and_unlabeled_states(request_dashboard):
+    """Show an empty state and default unlabeled counts to zero."""
+    assert b"No images yet" in request_dashboard("/labeling")[2]
+    dashboard.IMAGES_DIR.mkdir()
+    (dashboard.IMAGES_DIR / "capture.jpg").write_bytes(b"photo")
+    body = request_dashboard("/labeling")[2]
+    assert body.count(b'required value="0"') == 5
+    assert b"Save verified labels" in body
+    assert b"Data labeling" in request_dashboard("/")[2]
+
+
+@pytest.mark.parametrize("payload", [[], "invalid", {"counts": [0] * 5}])
+def test_rejects_invalid_payload(request_dashboard, payload):
+    """Return a client error for invalid request objects or missing images."""
+    status, _, _ = request_dashboard("/api/labels", "POST", payload)
+    assert status in ("400 Bad Request", "404 Not Found")
+
+
+def test_selected_image_has_its_own_values(request_dashboard):
+    """Keep saved counts separate when the user switches captures."""
+    dashboard.IMAGES_DIR.mkdir()
+    for name, count in [("first.jpg", 2), ("second.jpg", 4)]:
+        (dashboard.IMAGES_DIR / name).write_bytes(b"photo")
+        request_dashboard(
+            "/api/labels", "POST", {"image_path": name, "counts": [count] * 5}
+        )
+    for name, count in [("first.jpg", 2), ("second.jpg", 4)]:
+        body = request_dashboard(f"/labeling?image_path={name}")[2]
+        assert body.count(f'required value="{count}"'.encode()) == 5
+        assert f"/image?image_path={name}".encode() in body
+
+
+def test_missing_database_returns_error_without_creating_file(request_dashboard):
+    """Report unavailable storage without creating an empty database."""
+    dashboard.IMAGES_DIR.mkdir()
+    (dashboard.IMAGES_DIR / "capture.jpg").write_bytes(b"photo")
+    dashboard.DATABASE_PATH.unlink()
+    status, _, body = request_dashboard(
+        "/api/labels", "POST", {"image_path": "capture.jpg", "counts": [0] * 5}
+    )
+    assert status == "503 Service Unavailable"
+    assert "unavailable" in json.loads(body)["error"]
+    assert not dashboard.DATABASE_PATH.exists()
+
+
+def test_labeling_previous_and_next_images(request_dashboard):
+    """Navigate in capture order and disable navigation at either end."""
+    dashboard.IMAGES_DIR.mkdir()
+    for name in ("first.jpg", "middle.jpg", "last.jpg"):
+        (dashboard.IMAGES_DIR / name).write_bytes(b"photo")
+    # Filename order places last.jpg between first.jpg and middle.jpg.
+    body = request_dashboard("/labeling?image_path=last.jpg")[2]
+    assert b'href="/labeling?image_path=first.jpg"' in body
+    assert b'href="/labeling?image_path=middle.jpg"' in body
+    assert b'aria-label="Previous image"' in body
+    assert b'aria-label="Next image"' in body
+    first = request_dashboard("/labeling?image_path=first.jpg")[2]
+    assert b'aria-label="Previous image" aria-disabled="true"' in first
+    last = request_dashboard("/labeling?image_path=middle.jpg")[2]
+    assert b'aria-label="Next image" aria-disabled="true"' in last
+    assert b"Image 2 of 3" in body
+
+
+@pytest.mark.parametrize("direction", [0, 1])
+@pytest.mark.parametrize("outcome", ["success", "error", "invalid"])
+def test_navigation_saves_before_leaving(request_dashboard, direction, outcome):
+    """Run the page script and check save ordering and failed-save behavior."""
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node is required for the dashboard script test")
+    dashboard.IMAGES_DIR.mkdir()
+    (dashboard.IMAGES_DIR / "capture.jpg").write_bytes(b"photo")
+    html = request_dashboard("/labeling")[2].decode()
+    script = html.split("<script>")[1].split("</script>")[0]
+    result = subprocess.run(
+        [
+            node,
+            str(Path(__file__).with_name("dashboard_navigation.cjs")),
+            str(direction),
+            outcome,
+        ],
+        check=False,
+        input=script,
+        text=True,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr

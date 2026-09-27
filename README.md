@@ -35,7 +35,7 @@ Start the dashboard in a separate terminal:
 uv run wash-cam dashboard
 ```
 
-Open http://127.0.0.1:8000 on this computer. The page shows the latest JPEG from the checkout's `images/` directory.
+Open http://127.0.0.1:8000 on this computer. The Live view tab shows the latest JPEG from the checkout's `images/` directory.
 It reloads every 30 seconds and selects the latest image by its timestamp filename.
 The same image stays visible until a newer capture appears. An empty or missing directory shows `No images yet`.
 The dashboard does not capture images. Press Ctrl+C to stop it.
@@ -77,7 +77,12 @@ Missing-file errors include the copy instruction. The loader does not supply def
 The SQLite database at `db/labels.sqlite3` stores flexible JSON metadata for each verified image.
 Each image can include labels for multiple bays.
 See [the database documentation](db/README.md) for the schema, metadata convention, and migration command.
-Database inputs are planned for a future iteration.
+Open the dashboard’s **Data labeling** tab to select an image and enter vehicle counts for all five bays.
+Use **Previous image** and **Next image** to move through captures, or select an image from the dropdown.
+Saved counts load into the inputs when you select an image. Unsaved counts default to zero.
+Previous image and Next image save the current counts before navigation. A failed save keeps the current image open.
+Select **Save verified labels** to save all five counts and update the verification time.
+The labeling page does not refresh automatically.
 
 ## Run unit tests
 
@@ -95,3 +100,5 @@ uv run --locked pytest tests/test_cli.py::test_dummy_command
 
 Tests reside in `tests/` and import the installed package. They require no camera hardware or external services.
 Follow the red/green workflow in `AGENTS.md` for new behavior and bug fixes.
+
+Dashboard script tests use Node.js when available. Pytest skips these tests if Node.js is absent.
