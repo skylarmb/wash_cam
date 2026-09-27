@@ -225,3 +225,5 @@ agents which migration number you take before you write it.
   mini's screen.
 
 ## Open questions
+
+- None. The vacuum price is a placeholder, so update it when the real price is known.
