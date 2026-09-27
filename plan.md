@@ -63,11 +63,12 @@ agents which migration number you take before you write it.
 | Step 5: session scoring command and threshold tuning (ground truth comes from existing dashboard labels) | `src/wash_cam/sessions.py`, `src/wash_cam/session_eval.py`, `src/wash_cam/cli.py`, `tests/test_session_eval.py` | SapphireCompass (scorer done; tuning waits for labeled sequences) |
 | Step 7: nightly backups | `scripts/backup_db.sh`, one entry in `scripts/install_services.sh` | HazyValley |
 | Step 7: capture heartbeat (alerts go to `NOTIFICATIONS.md`) | `src/wash_cam/heartbeat.py` and its tests | ChartreuseCrane |
-| Step 5: `label-export` and label importer | new module and CLI command, with tests | SapphireCompass (next) |
-| Step 5: agent labeling (rubric, then day and night batches) | label files only, no code | StormyCliff |
-| Step 6: Analytics tab without revenue (heatmap, utilization, durations) | `src/wash_cam/dashboard/analytics.py` and its tests, route registration in `dashboard/__init__.py` | SapphireCompass (after `label-export`) |
+| Step 5: `label-export` and label importer | `src/wash_cam/labeling.py`, CLI commands, tests | SapphireCompass (done, `6615591`) |
+| Step 5: agent labeling (rubric, then day and night batches) | label files only, no code | SapphireCompass (next) |
+| Step 6: Analytics tab without revenue (heatmap, utilization, durations) | `src/wash_cam/dashboard/analytics.py` and its tests, route registration in `dashboard/__init__.py` | SapphireCompass (after labeling) |
 | Step 4 and revenue in step 6 (blocked on pricing) | a new revenue module | Later, probably SapphireCompass |
 | Coordination: `plan.md` status and `AGENTS.md` | `plan.md`, `AGENTS.md` | ScarletEagle |
+| QA: correctness, validation, simplicity, and scope reviews | review findings only | StormyCliff |
 
 ### Step 2: Timestamps and capture interval
 
@@ -133,8 +134,8 @@ agents which migration number you take before you write it.
   bays. Rowan decided that an agent labels them, not a human:
   - SapphireCompass builds `label-export`, which writes images with bay
     overlays and a manifest but no detections, and an importer.
-  - StormyCliff labels with its own vision model and never reads
-    `image_detections`. A rubric is agreed before the first batch.
+  - SapphireCompass labels with its own vision model and never reads
+    `image_detections`. StormyCliff (QA) reviews the rubric and a sample of\n    the labels before the first batch is imported.
   - Each agent label records `"labeled_by": "agent:<name>/<model>"` in
     `image_labels.metadata`. A later human check records `"reviewed_by"`. The
     importer never overwrites a label without `labeled_by`.
