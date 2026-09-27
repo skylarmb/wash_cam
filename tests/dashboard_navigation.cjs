@@ -6,6 +6,8 @@ const direction = process.argv[2];
 const keyboard = direction === "keyboard" || direction === "last_space";
 let focused;
 const outcome = process.argv[3];
+// For a frame with no saved label: 'untouched' or 'edited' before navigating.
+const unlabeled = process.argv[4];
 const events = [];
 let remembered = null;
 const links = ['previous', 'next'].map(name => ({
@@ -69,6 +71,18 @@ vm.runInNewContext(fs.readFileSync(0, 'utf8'), context);
       assert.equal(focused, elements.save);
     }
     await elements.labels.submit({preventDefault() { prevented = true; }});
+  } else if (unlabeled) {
+    if (unlabeled === 'edited') inputs[0].input();
+    await links[direction].click({preventDefault() { prevented = true; }});
+    assert.equal(prevented, true);
+    if (unlabeled === 'untouched') {
+      // Browsing past an unlabeled frame must not create a label row.
+      assert.deepEqual(events, [['navigate', links[direction].href]]);
+    } else {
+      assert.equal(events[0][0], 'save');
+      assert.deepEqual(events[1], ['navigate', links[direction].href]);
+    }
+    return;
   } else {
     assert.equal(typeof links[direction].click, 'function', 'Navigation must save before leaving');
     await links[direction].click({preventDefault() { prevented = true; }});

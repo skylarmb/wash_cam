@@ -281,30 +281,42 @@ def test_labeling_previous_and_next_images(request_dashboard):
     assert b"Image 2 of 3" in body
 
 
-@pytest.mark.parametrize("direction", [0, 1, "keyboard", "last_space"])
-@pytest.mark.parametrize("outcome", ["success", "error", "invalid"])
-def test_navigation_saves_before_leaving(request_dashboard, direction, outcome):
-    """Run the page script and check save ordering and failed-save behavior."""
+def run_navigation_script(request_dashboard, *args, saved=True):
+    """Render the labeling page for one capture and run its script under Node."""
     node = shutil.which("node")
     if node is None:
         pytest.skip("Node is required for the dashboard script test")
     dashboard.IMAGES_DIR.mkdir()
     (dashboard.IMAGES_DIR / "capture.jpg").write_bytes(b"photo")
+    if saved:
+        counts = {bay_id: 0 for bay_id in BAYS}
+        payload = {"image_path": "capture.jpg", "counts": counts}
+        assert request_dashboard("/api/labels", "POST", payload)[0] == "200 OK"
     html = request_dashboard("/labeling")[2].decode()
     script = html.split("<script>")[1].split("</script>")[0]
     result = subprocess.run(
-        [
-            node,
-            str(Path(__file__).with_name("dashboard_navigation.cjs")),
-            str(direction),
-            outcome,
-        ],
+        [node, str(Path(__file__).with_name("dashboard_navigation.cjs")), *args],
         check=False,
         input=script,
         text=True,
         capture_output=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("direction", [0, 1, "keyboard", "last_space"])
+@pytest.mark.parametrize("outcome", ["success", "error", "invalid"])
+def test_navigation_saves_before_leaving(request_dashboard, direction, outcome):
+    """Run the page script and check save ordering and failed-save behavior."""
+    run_navigation_script(request_dashboard, str(direction), outcome)
+
+
+@pytest.mark.parametrize("unlabeled", ["untouched", "edited"])
+def test_navigation_saves_unlabeled_frames_only_when_edited(
+    request_dashboard, unlabeled
+):
+    """Browsing past an unlabeled frame creates no row; editing it still saves."""
+    run_navigation_script(request_dashboard, "1", "success", unlabeled, saved=False)
 
 
 def test_dashboard_serves_network_with_reload(monkeypatch):
