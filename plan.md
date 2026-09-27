@@ -150,6 +150,11 @@ agents which migration number you take before you write it.
   - the error in start time, end time, and duration
 - [ ] Tune `OPEN_FRAMES`, `CLOSE_FRAMES`, and the detector thresholds against
   these scores.
+  - First sweep (2026-09-27, one evening, 20 sessions, agent labels): the
+    current open 2, close 2 matched 18, with 2 misses and 1 phantom. Open 1,
+    close 4 matched 19, with 1 miss and 0 phantoms. A higher open value only
+    adds misses. Close 4 removes phantoms and end error. Keep open 2 and test
+    close 4 again on a daytime batch before changing defaults.
 - [ ] Get daily revenue totals from the owner if possible. A week of totals
   would be the best check on overall accuracy.
 
