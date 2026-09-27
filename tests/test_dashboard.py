@@ -2,6 +2,7 @@
 
 import io
 import json
+import runpy
 import shutil
 import sqlite3
 import subprocess
@@ -23,18 +24,24 @@ def all_bays(count):
     return dict.fromkeys(BAYS, count)
 
 
-def test_serves_committed_images_from_any_working_directory(monkeypatch, tmp_path):
-    """Serve the latest shared image from the checkout's images directory."""
-    images = Path(__file__).resolve().parents[1] / "images"
-    expected = max(images.glob("*.jpg")).read_bytes()
+def test_serves_captures_from_any_working_directory(monkeypatch, tmp_path):
+    """Serve captures from tmp/images independently of the working directory."""
+    module = tmp_path / "checkout/src/wash_cam/dashboard/__init__.py"
+    module.parent.mkdir(parents=True)
+    shutil.copyfile(dashboard.__file__, module)
+    images = tmp_path / "checkout/tmp/images"
+    images.mkdir(parents=True)
+    expected = b"captured image"
+    (images / "20260926_162101_757377.jpg").write_bytes(expected)
     monkeypatch.chdir(tmp_path)
+    application = runpy.run_path(str(module))["application"]
     response = {}
 
     def start_response(status, headers):
         """Record the response status."""
         response["status"] = status
 
-    body = b"".join(dashboard.application({"PATH_INFO": "/latest.jpg"}, start_response))
+    body = b"".join(application({"PATH_INFO": "/latest.jpg"}, start_response))
 
     assert response["status"] == "200 OK"
     assert body == expected

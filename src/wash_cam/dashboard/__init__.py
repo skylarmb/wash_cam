@@ -13,7 +13,8 @@ from wash_cam.config import BAYS
 
 # Resolve shared files from the checkout, regardless of the working directory.
 ROOT = Path(__file__).resolve().parents[3]
-IMAGES_DIR = ROOT / "images"
+# Read camera output from the directory that Git ignores.
+IMAGES_DIR = ROOT / "tmp" / "images"
 DATABASE_PATH = ROOT / "db" / "labels.sqlite3"
 # Input titles for each bay ID prefix: wash bays and the vacuum station.
 BAY_TITLES = {"bay": "Bay", "vac": "Vacuum"}
