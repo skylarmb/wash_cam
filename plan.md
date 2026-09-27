@@ -60,8 +60,7 @@ agents which migration number you take before you write it.
 
 | Work | Main files | Owner |
 |---|---|---|
-| Step 5: session scoring command and threshold tuning | `src/wash_cam/sessions.py`, `src/wash_cam/evaluate/`, `tests/test_session_eval.py` | SapphireCompass |
-| Step 5: session labeling in the dashboard | `src/wash_cam/dashboard/` | Not assigned |
+| Step 5: session scoring command and threshold tuning (ground truth comes from existing dashboard labels) | `src/wash_cam/sessions.py`, `src/wash_cam/session_eval.py`, `src/wash_cam/cli.py`, `tests/test_session_eval.py` | SapphireCompass (in progress) |
 | Step 7: nightly backups | `scripts/backup_db.sh`, one entry in `scripts/install_services.sh` | HazyValley |
 | Step 7: capture heartbeat (delivery method is an open question) | `src/wash_cam/heartbeat.py` and its tests | ChartreuseCrane |
 | Steps 4 and 6: revenue and analytics (blocked on pricing and step 5) | `src/wash_cam/dashboard/`, a new revenue module | Later, probably SapphireCompass |
