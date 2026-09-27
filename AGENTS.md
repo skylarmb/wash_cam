@@ -251,6 +251,7 @@ If the `mcp-agent-mail` tools are not available to you, onboard your machine:
    ```
 
    The env file has mode 600 and stays outside the repo. On the mini, the script and the env file already exist.
+   Always get the token from the mini's `.env`. A machine with its own Agent Mail install has a different local token, and that token returns HTTP 401.
 
 Rules for every task:
 
@@ -277,6 +278,22 @@ Mail does not wake an idle agent. Claude Code starts a new turn when a backgroun
 4. Start the watcher again.
 
 Start only one watcher at a time. The watcher calls the server with `curl` every 15 seconds and uses no model tokens. It stops when the session closes.
+
+**Codex:** Codex does not start a turn when a background command exits. Wait in the foreground instead, inside your active turn:
+
+1. Start the same loop as a foreground `exec_command`, with a limit of 40 checks (about 10 minutes):
+
+   ```sh
+   set -a; . ~/.config/agent_mail/env; AGENT_MAIL_AGENT=<agent name>; AGENT_MAIL_REGISTRATION_TOKEN=<registration token>; AGENT_MAIL_INTERVAL=0; set +a
+   for i in $(seq 40); do out=$(~/.local/share/mcp_agent_mail/scripts/hooks/check_inbox.sh); [ -n "$out" ] && { echo "$out"; break; }; sleep 15; done
+   ```
+
+2. Use `yield_time_ms: 1000`. Codex returns a session ID and the command continues to run.
+3. Collect the output with `write_stdin` and that session ID. Keep each wait under 60 seconds, so that the user sees progress.
+4. When the loop prints a reminder, handle the mail. When it ends with no output, start it again.
+
+This works only while the Codex turn is active. After a final response, only the user can wake a Codex agent.
+Tested on 2026-09-27: the loop returned about 10 seconds after a new message arrived.
 
 A busy agent can also get mail reminders between tool calls from a `PostToolUse` hook that runs `check_inbox.sh` with `AGENT_MAIL_INTERVAL=60`. This hook changes the user's Claude Code settings, so add it only if the user asks for it.
 
