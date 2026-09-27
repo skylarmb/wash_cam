@@ -197,6 +197,10 @@ agents which migration number you take before you write it.
       interesting frames
     - recompress images
   - Analytics need only the detections, not the images.
+  - 2026-09-27: Skylar freed space. 45 GiB is free, which lasts about 80 days
+    at about 560 MB per day. A pruning proposal (14-day retention that keeps
+    labeled and batch frames, with an optional USB archive) is on hold until
+    space is a concern again.
 
 ## Future work
 
