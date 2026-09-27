@@ -55,17 +55,18 @@ Follow the red/green workflow in `AGENTS.md` for every step.
 
 ### Owners
 
-Owners are Agent Mail agent names. Reserve files before you edit them. Tell all
+Owners are Agent Mail agent names. Numbered rows run in that order. Reserve files before you edit them. Tell all
 agents which migration number you take before you write it.
 
 | Work | Main files | Owner |
 |---|---|---|
-| Step 5: session scoring command and threshold tuning (ground truth comes from existing dashboard labels) | `src/wash_cam/sessions.py`, `src/wash_cam/session_eval.py`, `src/wash_cam/cli.py`, `tests/test_session_eval.py` | SapphireCompass (scorer done; tuning waits for labeled sequences) |
-| Step 7: nightly backups | `scripts/backup_db.sh`, one entry in `scripts/install_services.sh` | HazyValley |
-| Step 7: capture heartbeat (alerts go to `NOTIFICATIONS.md`) | `src/wash_cam/heartbeat.py` and its tests | ChartreuseCrane |
+| Step 5: session scorer (`score-sessions`) | `src/wash_cam/session_eval.py`, `src/wash_cam/cli.py` | SapphireCompass (done, `fa78c9f`) |
 | Step 5: `label-export` and label importer | `src/wash_cam/labeling.py`, CLI commands, tests | SapphireCompass (done, `6615591`) |
-| Step 5: agent labeling (rubric, then day and night batches) | label files only, no code | SapphireCompass (next) |
-| Step 6: Analytics tab without revenue (heatmap, utilization, durations) | `src/wash_cam/dashboard/analytics.py` and its tests, route registration in `dashboard/__init__.py` | SapphireCompass (after labeling) |
+| 1. Step 7: capture heartbeat (alerts go to `NOTIFICATIONS.md`) | `src/wash_cam/heartbeat.py` and its tests, one entry in `scripts/install_services.sh` | SapphireCompass (next) |
+| 2. Step 5: agent labeling of the first batch (StormyCliff blind-checks about 30 frames before import) | label files only, no code | SapphireCompass |
+| 3. Step 7: nightly backups | `scripts/backup_db.sh`, one entry in `scripts/install_services.sh` | SapphireCompass |
+| 4. Step 6: Analytics tab without revenue (heatmap, utilization, durations) | `src/wash_cam/dashboard/analytics.py` and its tests, route registration in `dashboard/__init__.py` | SapphireCompass |
+| Step 5: threshold tuning (after labels are imported) | `src/wash_cam/sessions.py` | SapphireCompass |
 | Step 4 and revenue in step 6 (blocked on pricing) | a new revenue module | Later, probably SapphireCompass |
 | Coordination: `plan.md` status and `AGENTS.md` | `plan.md`, `AGENTS.md` | ScarletEagle |
 | QA: correctness, validation, simplicity, and scope reviews | review findings only | StormyCliff |
