@@ -22,6 +22,10 @@ VEHICLE_LABELS = frozenset({"car", "truck", "bus", "motorcycle"})
 # real bay vehicles scored 0.95+ day and night; spurious second-class guesses
 # on the same car scored 0.2-0.45.
 MIN_VEHICLE_SCORE = 0.5
+# Tallest plausible vehicle box, in cropped-capture pixels. Real cars in this
+# view are at most ~130px tall; at night the model sometimes reports a 220-270px
+# "truck" spanning the dark left side of the lot, which lands in the vacuum bay.
+MAX_VEHICLE_HEIGHT = 180
 # Vehicle boxes overlapping more than this (intersection over union) are one
 # vehicle, whatever class each was given.
 DUPLICATE_OVERLAP = 0.5
@@ -42,11 +46,13 @@ class Detection:
 
 
 def vehicles(detections: Sequence[Detection]) -> list[Detection]:
-    """Return confident vehicle detections with cross-class duplicates removed."""
+    """Return confident, plausibly sized vehicle detections with cross-class duplicates removed."""
     candidates = [
         detection
         for detection in detections
-        if detection.label in VEHICLE_LABELS and detection.score >= MIN_VEHICLE_SCORE
+        if detection.label in VEHICLE_LABELS
+        and detection.score >= MIN_VEHICLE_SCORE
+        and detection.box[3] - detection.box[1] <= MAX_VEHICLE_HEIGHT
     ]
     if not candidates:
         return []

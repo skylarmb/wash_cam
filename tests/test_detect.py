@@ -62,6 +62,18 @@ def test_count_vehicles_keeps_two_vehicles_in_one_bay():
     assert detect.count_vehicles(detections) == counts(bay_1=2)
 
 
+def test_count_vehicles_ignores_boxes_too_tall_to_be_a_vehicle():
+    """A phantom box spanning the dark lot is not a second car at the vacuum."""
+    detections = [
+        # The real car at the vacuum at 21:20, about 120px tall.
+        Detection((67.0, 152.0, 206.0, 272.0), "car", 0.94),
+        # A 270px "truck" covering the left side of the same frame.
+        Detection((3.0, 3.0, 316.0, 275.0), "truck", 0.77),
+    ]
+
+    assert detect.count_vehicles(detections) == counts(vac_0=1)
+
+
 class FakeDetector:
     """Return fixed detections instead of running the model."""
 

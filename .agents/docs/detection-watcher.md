@@ -4,4 +4,4 @@
 
 `take_picture()` writes each capture to `<name>.jpg.part` and renames it into place, so the watcher's `*.jpg` scan never reads a half-written file. All modules take the capture directory and database path from `wash_cam.config.IMAGES_DIR` and `DATABASE_PATH`.
 
-On the server, `scripts/install_services.sh` installs launchd agents `com.washcam.dashboard` and `com.washcam.watch` (start at login, restart on exit, logs in `tmp/logs/`). Re-run it after moving the checkout. The capture loop (`scripts/capture_loop.sh`) is started separately.
+On the server, `scripts/install_services.sh` installs launchd agents `com.washcam.capture` (`scripts/capture_loop.sh`, restarted after each run's DURATION), `com.washcam.dashboard`, and `com.washcam.watch`: started at login, restarted on exit, logs in `tmp/logs/`. Re-run it after moving the checkout or changing code the services load. The first capture under launchd may need camera access approved on the server's screen. To redo detections after a model or filtering change, delete rows from `image_detections`; the watcher refills them.
