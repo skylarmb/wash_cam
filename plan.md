@@ -60,7 +60,7 @@ agents which migration number you take before you write it.
 
 | Work | Main files | Owner |
 |---|---|---|
-| Step 5: session scoring command and threshold tuning (ground truth comes from existing dashboard labels) | `src/wash_cam/sessions.py`, `src/wash_cam/session_eval.py`, `src/wash_cam/cli.py`, `tests/test_session_eval.py` | SapphireCompass (in progress) |
+| Step 5: session scoring command and threshold tuning (ground truth comes from existing dashboard labels) | `src/wash_cam/sessions.py`, `src/wash_cam/session_eval.py`, `src/wash_cam/cli.py`, `tests/test_session_eval.py` | SapphireCompass (scorer done; tuning waits for labeled sequences) |
 | Step 7: nightly backups | `scripts/backup_db.sh`, one entry in `scripts/install_services.sh` | HazyValley |
 | Step 7: capture heartbeat (alerts go to `NOTIFICATIONS.md`) | `src/wash_cam/heartbeat.py` and its tests | ChartreuseCrane |
 | Steps 4 and 6: revenue and analytics (blocked on pricing and step 5) | `src/wash_cam/dashboard/`, a new revenue module | Later, probably SapphireCompass |
@@ -129,7 +129,7 @@ agents which migration number you take before you write it.
 - [ ] Hand-label a few hours of consecutive frames, day and night, with true
   session start and end times per bay. Store them as labeled sessions or
   derive them from per-frame labels.
-- [ ] Add a scoring command, similar to `wash-cam evaluate`, that matches
+- [x] Add a scoring command, `wash-cam score-sessions [--open N] [--close N]`, that matches
   predicted sessions to labeled ones. It reports:
   - missed sessions
   - phantom sessions

@@ -11,16 +11,17 @@ Use Git to transfer code. Do not copy a local checkout or virtual environment ov
 
 ### Services and data
 
-Verified on 2026-09-26 at server commit `0ad5486`:
+Verified on 2026-09-27 at server commit `4d053ce`:
 
 | Component | Management | Output |
 | --- | --- | --- |
 | Dashboard | LaunchAgent `com.washcam.dashboard` | Port 8000, `tmp/logs/dashboard.log` |
 | Detection watcher | LaunchAgent `com.washcam.watch` | `db/labels.sqlite3`, `tmp/logs/watch.log` |
-| Camera capture | `scripts/capture_loop.sh` in tmux | `tmp/images/`, `tmp/capture.log` |
+| Camera capture | LaunchAgent `com.washcam.capture` | `tmp/images/`, `tmp/capture.log`, `tmp/logs/capture.log` |
 
 LaunchAgent definitions reside in `~/Library/LaunchAgents/` with the label plus `.plist` as their names.
-They run `.venv/bin/wash-cam dashboard` and `.venv/bin/wash-cam watch` from the server checkout.
+`scripts/install_services.sh` writes them. They run `.venv/bin/wash-cam dashboard`, `.venv/bin/wash-cam watch`,
+and `scripts/capture_loop.sh` from the server checkout.
 They start at user login and restart after exit. They require Skylar's GUI login session.
 An SSH connection alone does not establish that session. Do not use `sudo` or the system launchd domain.
 The dashboard has a Werkzeug reload parent and child. Two dashboard processes are normal.
@@ -29,9 +30,9 @@ Refresh the browser after dashboard changes.
 
 The watcher scans captures every five seconds and stores results for images without detections.
 It does not capture images or recompute existing detections after a model change.
-The capture loop defaults to a 30-second interval and an eight-hour duration.
-It uses `caffeinate -ims` to prevent sleep and starts a new camera process for each capture.
-It is not a LaunchAgent and does not restart automatically after exit or reboot.
+The capture service passes `INTERVAL` from `CAPTURE_INTERVAL` in `src/wash_cam/config.py` (15 seconds).
+Each capture loop run lasts eight hours. Then launchd `KeepAlive` starts the next run.
+The loop uses `caffeinate -ims` to prevent sleep and starts a new camera process for each capture.
 
 Keep `config.yaml`, calibration files, captures, model caches, and the live database on the Mini.
 At the verified server revision, Git ignores `db/labels.sqlite3` and its journals.
@@ -52,7 +53,7 @@ git log -3 --oneline
 launchctl list | rg 'com\.washcam\.'
 launchctl print "gui/$(id -u)/com.washcam.dashboard" | head -45
 launchctl print "gui/$(id -u)/com.washcam.watch" | head -45
-tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index} #{pane_current_command} #{pane_current_path}'
+launchctl print "gui/$(id -u)/com.washcam.capture" | head -45
 ps -axo pid,ppid,etime,command | rg '[c]apture_loop.sh|[w]ash-cam'
 tail -10 tmp/capture.log
 tail -c 4000 tmp/logs/watch.log | tr '\r' '\n' | tail -20
@@ -160,24 +161,29 @@ rmdir /Users/skylar/.wash-cam-deploy-lock
 
 ### Manage the camera loop
 
-Inspect tmux panes and processes before selecting a target. Pane identifiers can change.
-At inspection, capture ran in `main:1.2`, alongside another agent in `main:1.1`.
-Do not send commands to an agent's pane or terminate the shared tmux session.
-With deployment ownership, attach using `ssh -t skylar@10.0.4.25 'tmux attach -t main'`.
-Select the confirmed capture pane and press Ctrl+C to stop its foreground loop.
-Verify that the loop and its current camera child have exited before hardware tests or dependency updates.
+The LaunchAgent `com.washcam.capture` runs the capture loop. Do not start the loop by hand.
+A second loop competes with the service for the camera. Pausing and resuming capture requires the deploy lock.
 
-Start the loop in the confirmed idle capture pane after maintenance:
+Pause capture:
 
 ```sh
-cd /Users/skylar/workspace/wash_cam
-INTERVAL=30 DURATION=28800 LOG=tmp/capture.log ./scripts/capture_loop.sh
+launchctl bootout "gui/$(id -u)/com.washcam.capture"
 ```
 
-Preserve any previously agreed interval, duration, and log path when restarting.
-Detach with the tmux detach binding. Do not press Ctrl+C when you intend to leave capture running.
-Do not start duplicate loops or run manual camera/calibration commands during capture.
+Verify that the loop and its current camera child have exited before hardware tests or dependency updates:
+`ps -axo pid,command | rg '[c]apture_loop.sh'` prints nothing.
+
+Resume capture after maintenance:
+
+```sh
+launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.washcam.capture.plist
+```
+
+To change the interval, edit `CAPTURE_INTERVAL` in `src/wash_cam/config.py`, then run `scripts/install_services.sh`.
+Sessions use the same value, so do not set `INTERVAL` anywhere else.
+Do not run manual camera or calibration commands while capture runs.
 Camera access depends on macOS privacy permissions for the launching process.
+Under launchd, the permission belongs to the virtualenv's Nix Python. See `.agents/docs/detection-watcher.md`.
 If capture fails, inspect the log and the Mini's camera permissions instead of repeatedly restarting unrelated services.
 
 ## Testing
