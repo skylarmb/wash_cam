@@ -6,11 +6,10 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from wash_cam.config import BAYS, CHECKOUT_ROOT
+from wash_cam.config import BAYS, CHECKOUT_ROOT, IMAGES_DIR
 
 __all__ = ["assign_to_bay", "draw_bays", "run"]
 
-IMAGES_DIR = CHECKOUT_ROOT / "images"
 # Git-ignored, so review overlays never end up in version control.
 REVIEW_DIR = CHECKOUT_ROOT / "tmp" / "bay_review"
 
@@ -61,7 +60,7 @@ def draw_bays(image: np.ndarray) -> np.ndarray:
 
 
 def run(images: Sequence[Path] | None = None, output: Path = REVIEW_DIR) -> None:
-    """Write a bay overlay for each image, defaulting to every capture in images/."""
+    """Write a bay overlay for each image, defaulting to every capture in tmp/images/."""
     paths = list(images) if images else sorted(IMAGES_DIR.glob("*.jpg"))
     output.mkdir(parents=True, exist_ok=True)
     for path in paths:

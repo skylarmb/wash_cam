@@ -1,0 +1,7 @@
+# Detection watcher
+
+`wash-cam watch` (`wash_cam.watch`) runs on the server and stores a detection for every capture. It migrates the database, loads `VehicleDetector` once, then every `POLL_INTERVAL` (5 s) runs `process_new_images`: each `.jpg` in `tmp/images/` without an `image_detections` row is detected and committed individually. Because it works from "no row yet" rather than file events, it processes any backlog on start and loses nothing across restarts or crashes. Undecodable files are skipped for the life of the process. Rows record per-bay counts, the counted vehicles with boxes and scores, and the model name; see `db/README.md`.
+
+`take_picture()` writes each capture to `<name>.jpg.part` and renames it into place, so the watcher's `*.jpg` scan never reads a half-written file. All modules take the capture directory and database path from `wash_cam.config.IMAGES_DIR` and `DATABASE_PATH`.
+
+On the server, `scripts/install_services.sh` installs launchd agents `com.washcam.dashboard` and `com.washcam.watch` (start at login, restart on exit, logs in `tmp/logs/`). Re-run it after moving the checkout. The capture loop (`scripts/capture_loop.sh`) is started separately.

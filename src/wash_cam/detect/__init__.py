@@ -8,11 +8,10 @@ import cv2
 import numpy as np
 
 from wash_cam.bays import Box, assign_to_bay, draw_bays
-from wash_cam.config import BAYS, CHECKOUT_ROOT
+from wash_cam.config import BAYS, CHECKOUT_ROOT, IMAGES_DIR
 
 __all__ = ["Detection", "VehicleDetector", "count_vehicles", "run"]
 
-IMAGES_DIR = CHECKOUT_ROOT / "images"
 # Git-ignored, so review overlays never end up in version control.
 REVIEW_DIR = CHECKOUT_ROOT / "tmp" / "detections"
 
@@ -80,6 +79,9 @@ class VehicleDetector:
     never build a detector do not pay its import time. The first use downloads
     about 170 MB of weights into the torch cache.
     """
+
+    # Recorded with stored detections to tell model versions apart.
+    name = "fasterrcnn_resnet50_fpn_v2_coco"
 
     def __init__(self) -> None:
         import torch

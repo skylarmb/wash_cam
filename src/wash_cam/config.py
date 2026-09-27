@@ -11,6 +11,11 @@ CHECKOUT_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = CHECKOUT_ROOT / "config.yaml"
 EXAMPLE_CONFIG_PATH = CHECKOUT_ROOT / "config.example.yaml"
 
+# Captures and the database live on the server that runs the camera. Both are
+# git-ignored: the database is built from db/migrations with `wash-cam migrate`.
+IMAGES_DIR = CHECKOUT_ROOT / "tmp" / "images"
+DATABASE_PATH = CHECKOUT_ROOT / "db" / "labels.sqlite3"
+
 # Reference frames that calibration aligns later captures against, one per
 # lighting condition (day, night, ...). All are stored in canonical
 # coordinates, so CAMERA_CROP_BOX means the same thing against any of them.

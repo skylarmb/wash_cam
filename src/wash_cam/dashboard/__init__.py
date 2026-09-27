@@ -4,18 +4,12 @@ import json
 import sqlite3
 from contextlib import closing
 from html import escape
-from pathlib import Path
 from urllib.parse import parse_qs, urlencode
 
 from werkzeug import serving
 
-from wash_cam.config import BAYS
+from wash_cam.config import BAYS, DATABASE_PATH, IMAGES_DIR
 
-# Resolve shared files from the checkout, regardless of the working directory.
-ROOT = Path(__file__).resolve().parents[3]
-# Read camera output from the directory that Git ignores.
-IMAGES_DIR = ROOT / "tmp" / "images"
-DATABASE_PATH = ROOT / "db" / "labels.sqlite3"
 # Input titles for each bay ID prefix: wash bays and the vacuum station.
 BAY_TITLES = {"bay": "Bay", "vac": "Vacuum"}
 

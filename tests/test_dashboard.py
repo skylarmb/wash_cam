@@ -2,7 +2,6 @@
 
 import io
 import json
-import runpy
 import shutil
 import sqlite3
 import subprocess
@@ -14,7 +13,7 @@ from wsgiref.util import setup_testing_defaults
 import pytest
 from werkzeug import serving
 
-from wash_cam import dashboard
+from wash_cam import config, dashboard
 from wash_cam.cli import main
 from wash_cam.config import BAYS
 
@@ -24,27 +23,13 @@ def all_bays(count):
     return dict.fromkeys(BAYS, count)
 
 
-def test_serves_captures_from_any_working_directory(monkeypatch, tmp_path):
-    """Serve captures from tmp/images independently of the working directory."""
-    module = tmp_path / "checkout/src/wash_cam/dashboard/__init__.py"
-    module.parent.mkdir(parents=True)
-    shutil.copyfile(dashboard.__file__, module)
-    images = tmp_path / "checkout/tmp/images"
-    images.mkdir(parents=True)
-    expected = b"captured image"
-    (images / "20260926_162101_757377.jpg").write_bytes(expected)
+def test_serves_captures_from_the_checkout_capture_directory(monkeypatch, tmp_path):
+    """Serve captures from the checkout's tmp/images, whatever the working directory."""
     monkeypatch.chdir(tmp_path)
-    application = runpy.run_path(str(module))["application"]
-    response = {}
+    checkout = Path(__file__).resolve().parents[1]
 
-    def start_response(status, headers):
-        """Record the response status."""
-        response["status"] = status
-
-    body = b"".join(application({"PATH_INFO": "/latest.jpg"}, start_response))
-
-    assert response["status"] == "200 OK"
-    assert body == expected
+    assert dashboard.IMAGES_DIR == checkout / "tmp" / "images"
+    assert dashboard.IMAGES_DIR == config.IMAGES_DIR
 
 
 @pytest.fixture

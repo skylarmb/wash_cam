@@ -1,2 +1,11 @@
 # Copy this file to config.yaml at the checkout root for local settings.
 example: true
+# Known-good camera alignment from the first collection run, mapping the
+# camera's view onto the reference frame that CAMERA_CROP_BOX is drawn in.
+# Replace it by running `wash-cam calibrate` once references exist for the
+# current camera position.
+calibration:
+  matrix:
+  - [0.9873742022626958, -0.008437058719333422, 62.418796538820594]
+  - [0.008437058719333422, 0.9873742022626958, 170.33817876159623]
+  reference_size: [1920, 1080]

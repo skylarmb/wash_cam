@@ -1,17 +1,14 @@
 # Image labels
 
-`labels.sqlite3` stores one verified label record per image in `image_labels`.
-Git tracks the migrations and the database. Git ignores temporary journal files.
-Images remain in `images/`.
-
-Only one developer modifies the database at a time.
-Pull the latest database before a labeling session.
-Close the database connection before committing the database file.
-Commit and push the database before another developer starts labeling.
+`labels.sqlite3` stores one verified label record per image in `image_labels`
+and one model prediction per image in `image_detections`.
+The database and the captures in `tmp/images/` live only on the server (the Mac mini).
+Git tracks the migrations but ignores the database and its journal files.
+Label through the server's dashboard rather than copying the database around.
 
 | Column | Meaning |
 | --- | --- |
-| `image_path` | Unique, non-null path relative to `images/`. Include any subdirectories. |
+| `image_path` | Unique, non-null path relative to `tmp/images/`. Include any subdirectories. |
 | `metadata` | Non-null JSON object stored as text. Label fields can vary between records. |
 | `verified_at` | Non-null UTC verification time. Defaults to the insertion time in `YYYY-MM-DD HH:MM:SS` format. |
 
@@ -60,17 +57,15 @@ See the [SQLite JSON documentation](https://www.sqlite.org/json1.html).
 
 ## Create the database
 
-The tracked database already contains this migration.
-Run this command only when creating a new database from the repository root:
+Create the database, or upgrade it to the latest schema:
 
 ```sh
-sqlite3 -bail db/labels.sqlite3 < db/migrations/001_image_labels.sql
+uv run wash-cam migrate
 ```
 
-The migration creates the table and sets `PRAGMA user_version` to `1` in one transaction.
-The command fails if the table already exists.
-Apply each numbered migration once, in order.
-There is no migration runner.
+Each migration `NNN_description.sql` sets `PRAGMA user_version` to `NNN` in its own transaction.
+`migrate` applies every migration newer than the recorded version, in order, and is a no-op once current.
+`001` creates `image_labels`. `002` creates `image_detections`.
 
 Check the database version and integrity:
 
@@ -83,7 +78,15 @@ sqlite3 db/labels.sqlite3 'PRAGMA user_version; PRAGMA integrity_check;'
 The dashboard serves `GET /api/labels?image_path=<filename>`.
 It returns `null` for an unverified image or an object with `metadata` and `verified_at`.
 Unknown images return HTTP 404.
-The dashboard lists JPEG files directly inside `images/`.
+The dashboard lists JPEG files directly inside `tmp/images/`.
+
+## Detections
+
+`wash-cam watch` stores one `image_detections` row per capture, keyed by `image_path`.
+`model` names the detector, and `detected_at` is the UTC detection time.
+`metadata.vehicles.bays` uses the same convention as labels, with a count for every bay.
+`metadata.vehicles.detections` lists each counted vehicle with its `bay_id` (null outside every bay), `label`, `score`, and `box` as `[left, top, right, bottom]`.
+Delete rows to have the watcher detect those captures again.
 
 Send `POST /api/labels` with `Content-Type: application/json`:
 

@@ -13,8 +13,9 @@ import numpy as np
 
 from wash_cam.config import (
     BAYS,
-    CHECKOUT_ROOT,
     DARK_PIXEL_LEVEL,
+    DATABASE_PATH,
+    IMAGES_DIR,
     NIGHT_DARK_FRACTION,
 )
 from wash_cam.detect import VehicleDetector
@@ -30,8 +31,6 @@ __all__ = [
     "score",
 ]
 
-IMAGES_DIR = CHECKOUT_ROOT / "images"
-DATABASE_PATH = CHECKOUT_ROOT / "db" / "labels.sqlite3"
 # Vehicle counts for one image, keyed by bay ID. A labeled image may omit bays
 # the labeler did not fill in; a prediction covers every bay.
 Counts = dict[str, int]

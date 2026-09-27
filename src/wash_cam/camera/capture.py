@@ -1,16 +1,16 @@
 """Capture still images from a webcam."""
 
 from datetime import datetime
-from pathlib import Path
 
 import cv2
 import numpy as np
 
-from wash_cam.config import CAMERA_CROP_BOX, CAMERA_WARMUP_FRAMES, load_calibration
-
-# Images are saved relative to the repository root, three levels above this file
-# (src/wash_cam/camera/capture.py -> repo root).
-IMAGES_DIR = Path(__file__).resolve().parents[3] / "tmp" / "images"
+from wash_cam.config import (
+    CAMERA_CROP_BOX,
+    CAMERA_WARMUP_FRAMES,
+    IMAGES_DIR,
+    load_calibration,
+)
 
 
 def crop_to_box(frame, crop_box: tuple[int, int, int, int]):
@@ -94,6 +94,13 @@ def take_picture(camera_index: int = 0) -> str:
     IMAGES_DIR.mkdir(parents=True, exist_ok=True)
     # Microsecond precision avoids collisions between captures taken in the same second.
     filename = f"{datetime.now().astimezone().strftime('%Y%m%d_%H%M%S_%f')}.jpg"
-    cv2.imwrite(str(IMAGES_DIR / filename), cropped_frame)
+    encoded, jpeg = cv2.imencode(".jpg", cropped_frame)
+    if not encoded:
+        raise RuntimeError("Could not encode the captured frame as JPEG.")
+    # Write under a name the detection watcher ignores, then rename: the rename
+    # is atomic, so the watcher never reads a half-written capture.
+    partial = IMAGES_DIR / f"{filename}.part"
+    partial.write_bytes(jpeg.tobytes())
+    partial.replace(IMAGES_DIR / filename)
 
     return filename

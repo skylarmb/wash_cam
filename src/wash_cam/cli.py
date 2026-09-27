@@ -3,8 +3,9 @@
 import argparse
 from pathlib import Path
 
-from wash_cam import bays, camera, dashboard, detect, dummy, evaluate
+from wash_cam import bays, camera, dashboard, db, detect, dummy, evaluate, watch
 from wash_cam.camera import calibrate
+from wash_cam.config import DATABASE_PATH
 
 
 def main() -> None:
@@ -34,7 +35,7 @@ def main() -> None:
         "images",
         nargs="*",
         type=Path,
-        help="Images to draw on. Defaults to every capture in images/.",
+        help="Images to draw on. Defaults to every capture in tmp/images/.",
     )
     command.add_argument(
         "--output",
@@ -60,7 +61,7 @@ def main() -> None:
         "images",
         nargs="*",
         type=Path,
-        help="Images to detect in. Defaults to every capture in images/.",
+        help="Images to detect in. Defaults to every capture in tmp/images/.",
     )
     command.add_argument(
         "--output",
@@ -69,6 +70,14 @@ def main() -> None:
         help="Directory for the overlays. Defaults to tmp/detections/.",
     )
     command.set_defaults(run=detect.run)
+    command = commands.add_parser(
+        "migrate", help="Create or upgrade the database to the latest schema."
+    )
+    command.set_defaults(run=lambda: db.migrate(DATABASE_PATH))
+    command = commands.add_parser(
+        "watch", help="Detect vehicles in every new capture and store the results."
+    )
+    command.set_defaults(run=watch.run)
     args = parser.parse_args()
     arguments = vars(args)
     arguments.pop("command", None)

@@ -79,7 +79,8 @@ Missing-file errors include the copy instruction. The loader does not supply def
 
 ## Store verified image labels
 
-The SQLite database at `db/labels.sqlite3` stores flexible JSON metadata for each verified image.
+The SQLite database at `db/labels.sqlite3` stores flexible JSON metadata for each verified image, and model detections in a separate table.
+The database and captures live only on the server (the Mac mini); git ignores both. Create or upgrade the database with `uv run wash-cam migrate`.
 Each image can include labels for multiple bays.
 See [the database documentation](db/README.md) for the schema, metadata convention, and migration command.
 Open the dashboard’s **Data labeling** tab to select an image and enter vehicle counts for the five wash bays (Bay 0 is leftmost) and the vacuum station.
