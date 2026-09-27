@@ -62,7 +62,7 @@ agents which migration number you take before you write it.
 |---|---|---|
 | Step 5: session scorer (`score-sessions`) | `src/wash_cam/session_eval.py`, `src/wash_cam/cli.py` | SapphireCompass (done, `fa78c9f`) |
 | Step 5: `label-export` and label importer | `src/wash_cam/labeling.py`, CLI commands, tests | SapphireCompass (done, `6615591`) |
-| 1. Step 7: capture heartbeat (alerts go to `NOTIFICATIONS.md`) | `src/wash_cam/heartbeat.py` and its tests, one entry in `scripts/install_services.sh` | SapphireCompass (next) |
+| 1. Step 7: capture heartbeat (alerts go to `NOTIFICATIONS.md`) | `src/wash_cam/heartbeat.py` and its tests, one entry in `scripts/install_services.sh` | ScarletEagle (done, awaiting QA and deploy) |
 | 2. Step 5: agent labeling of the first batch (StormyCliff blind-checks about 30 frames before import) | label files only, no code | SapphireCompass |
 | 3. Step 7: nightly backups | `scripts/backup_db.sh`, one entry in `scripts/install_services.sh` | SapphireCompass |
 | 4. Step 6: Analytics tab without revenue (heatmap, utilization, durations) | `src/wash_cam/dashboard/analytics.py` and its tests, route registration in `dashboard/__init__.py` | SapphireCompass |
@@ -176,7 +176,7 @@ agents which migration number you take before you write it.
 
 ### Step 7: Operations (alongside the other steps)
 
-- [ ] **Capture heartbeat:** alert when no capture arrives for 5 minutes.
+- [x] **Capture heartbeat:** alert when no capture arrives for 5 minutes.
   Append each alert to `NOTIFICATIONS.md` at the root of the mini's checkout.
   Git ignores this file. Skylar reviews it each morning.
 - [ ] **Nightly backups:** back up the database with SQLite's `.backup`

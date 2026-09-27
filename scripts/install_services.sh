@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Install launchd agents that keep the capture loop, dashboard, and detection
-# watcher running on the server: started at login, restarted if they exit.
+# Install launchd agents that keep the capture loop, dashboard, detection
+# watcher, and capture heartbeat running on the server: started at login,
+# restarted if they exit.
 #
 # The first capture under launchd may trigger a macOS camera permission prompt
 # on the server's screen; approve it there once.
@@ -28,7 +29,7 @@ mkdir -p "$AGENTS" "$LOGS"
 # sessions also use, so the two cannot drift apart.
 INTERVAL="$("$CHECKOUT/.venv/bin/python" -c 'from wash_cam.config import CAPTURE_INTERVAL; print(int(CAPTURE_INTERVAL))')"
 
-for service in capture dashboard watch; do
+for service in capture dashboard watch heartbeat; do
   environment=""
   case "$service" in
     capture)

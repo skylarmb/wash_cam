@@ -18,10 +18,11 @@ Verified on 2026-09-27 at server commit `4d053ce`:
 | Dashboard | LaunchAgent `com.washcam.dashboard` | Port 8000, `tmp/logs/dashboard.log` |
 | Detection watcher | LaunchAgent `com.washcam.watch` | `db/labels.sqlite3`, `tmp/logs/watch.log` |
 | Camera capture | LaunchAgent `com.washcam.capture` | `tmp/images/`, `tmp/capture.log`, `tmp/logs/capture.log` |
+| Capture heartbeat | LaunchAgent `com.washcam.heartbeat` | `NOTIFICATIONS.md`, `tmp/logs/heartbeat.log` |
 
 LaunchAgent definitions reside in `~/Library/LaunchAgents/` with the label plus `.plist` as their names.
 `scripts/install_services.sh` writes them. They run `.venv/bin/wash-cam dashboard`, `.venv/bin/wash-cam watch`,
-and `scripts/capture_loop.sh` from the server checkout.
+`.venv/bin/wash-cam heartbeat`, and `scripts/capture_loop.sh` from the server checkout.
 They start at user login and restart after exit. They require Skylar's GUI login session.
 An SSH connection alone does not establish that session. Do not use `sudo` or the system launchd domain.
 The dashboard has a Werkzeug reload parent and child. Two dashboard processes are normal.

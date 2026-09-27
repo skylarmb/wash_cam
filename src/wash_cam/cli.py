@@ -11,6 +11,7 @@ from wash_cam import (
     detect,
     dummy,
     evaluate,
+    heartbeat,
     labeling,
     session_eval,
     sessions,
@@ -101,6 +102,10 @@ def main() -> None:
         "watch", help="Detect vehicles in every new capture and store the results."
     )
     command.set_defaults(run=watch.run)
+    command = commands.add_parser(
+        "heartbeat", help="Record capture outages in NOTIFICATIONS.md."
+    )
+    command.set_defaults(run=heartbeat.run)
     command = commands.add_parser(
         "sessions", help="Update bay visit sessions from stored detections."
     )
