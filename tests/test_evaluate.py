@@ -26,12 +26,13 @@ def database(tmp_path):
     return path
 
 
-def insert_label(database, image_path, counts):
-    """Store verified counts for the bays in a {bay_id: count} mapping."""
+def insert_label(database, image_path, counts, labeled_by=None):
+    """Store counts for the bays in a {bay_id: count} mapping, from a human by default."""
     entries = [
         {"bay_id": bay_id, "vehicle_count": count} for bay_id, count in counts.items()
     ]
-    metadata = json.dumps({"vehicles": {"bays": entries}})
+    provenance = {"labeled_by": labeled_by} if labeled_by else {}
+    metadata = json.dumps({"vehicles": {"bays": entries}, **provenance})
     with closing(sqlite3.connect(database)) as db, db:
         db.execute(
             "INSERT INTO image_labels (image_path, metadata) VALUES (?, ?)",
@@ -67,7 +68,7 @@ def test_load_labels_keeps_known_labeled_bays(database):
     """Counts are keyed by bay ID; unlabeled and unknown bays are left out."""
     insert_label(database, "a.jpg", {"bay_0": 0, "bay_1": 2, "vac_0": 1, "bay_9": 3})
 
-    labels = evaluate.load_labels(database)
+    labels = evaluate.load_labels(database, "human")
 
     assert labels == {"a.jpg": {"bay_0": 0, "bay_1": 2, "vac_0": 1}}
 
@@ -103,7 +104,7 @@ def test_evaluate_splits_day_and_night(database, tmp_path):
     insert_label(database, "day.jpg", all_bays(0))
     insert_label(database, "night.jpg", {**all_bays(0), "bay_1": 1})
 
-    scores = evaluate.evaluate(FixedPredictor(all_bays(0)), database, images)
+    scores = evaluate.evaluate(FixedPredictor(all_bays(0)), database, images, "human")
 
     assert scores["all"].images == 2
     assert scores["day"].image_accuracy == 1.0
@@ -114,7 +115,7 @@ def test_evaluate_skips_labels_without_an_image(database, tmp_path):
     """A label whose image is missing on disk is not scored."""
     insert_label(database, "missing.jpg", all_bays(0))
 
-    scores = evaluate.evaluate(FixedPredictor(all_bays(0)), database, tmp_path)
+    scores = evaluate.evaluate(FixedPredictor(all_bays(0)), database, tmp_path, "human")
 
     assert scores["all"].images == 0
 
@@ -124,3 +125,13 @@ def test_empty_model_predicts_no_vehicles():
     image = np.zeros((340, 1270, 3), dtype=np.uint8)
 
     assert evaluate.MODELS["empty"]().predict(image) == all_bays(0)
+
+
+def test_load_labels_separates_agent_and_human_labels(database):
+    """Agent labels carry labeled_by; human labels do not. Agent is the default."""
+    insert_label(database, "human.jpg", {"bay_0": 1})
+    insert_label(database, "agent.jpg", {"bay_0": 2}, labeled_by="agent:X/y")
+
+    assert set(evaluate.load_labels(database)) == {"agent.jpg"}
+    assert set(evaluate.load_labels(database, "agent")) == {"agent.jpg"}
+    assert set(evaluate.load_labels(database, "human")) == {"human.jpg"}

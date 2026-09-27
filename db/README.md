@@ -12,6 +12,7 @@ Label through the server's dashboard rather than copying the database around.
 | `metadata` | Non-null JSON object stored as text. Label fields can vary between records. |
 | `verified_at` | Non-null UTC verification time. Defaults to the insertion time in `YYYY-MM-DD HH:MM:SS` format. |
 
+Rows written by a labeling agent add `labeled_by` (for example `agent:StormyCliff/gpt-6`), `batch_id`, `uncertain_bays`, and `notes` to `metadata`, and are written only by `wash-cam label-import`. Rows without `labeled_by` are human labels. See `.agents/docs/labeling.md`.
 Verification covers all labels for an image at once.
 An absent row means no verified labels have been saved.
 The table stores the current labels without revision history.

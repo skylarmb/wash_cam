@@ -17,7 +17,21 @@ from wash_cam.sessions import (
     build_sessions,
 )
 
-__all__ = ["SessionScore", "evaluate_sessions", "run", "score_sessions"]
+__all__ = [
+    "LABEL_SOURCES",
+    "SessionScore",
+    "evaluate_sessions",
+    "run",
+    "score_sessions",
+]
+
+# SQL conditions selecting each label source. Agent labels record who labeled
+# them in metadata.labeled_by; human labels (from the dashboard) do not. Scores
+# against agent labels measure agreement with that agent, not accuracy.
+LABEL_SOURCES = {
+    "agent": "json_extract(l.metadata, '$.labeled_by') IS NOT NULL",
+    "human": "json_extract(l.metadata, '$.labeled_by') IS NULL",
+}
 
 
 @dataclass(frozen=True)
@@ -130,7 +144,9 @@ def bay_counts(metadata: str) -> dict[str, int]:
     }
 
 
-def paired_frames(database: Path) -> dict[str, tuple[list[Frame], list[Frame]]]:
+def paired_frames(
+    database: Path, labels: str = "agent"
+) -> dict[str, tuple[list[Frame], list[Frame]]]:
     """Return each bay's (labeled, detected) frames over the same labeled captures.
 
     Only captures with both a human label and a timestamped detection are used,
@@ -140,7 +156,8 @@ def paired_frames(database: Path) -> dict[str, tuple[list[Frame], list[Frame]]]:
         rows = db.execute(
             "SELECT d.captured_at, l.metadata, d.metadata "
             "FROM image_labels AS l JOIN image_detections AS d USING (image_path) "
-            "WHERE d.captured_at IS NOT NULL ORDER BY d.captured_at"
+            f"WHERE d.captured_at IS NOT NULL AND {LABEL_SOURCES[labels]} "
+            "ORDER BY d.captured_at"
         ).fetchall()
 
     frames: dict[str, tuple[list[Frame], list[Frame]]] = {
@@ -161,6 +178,7 @@ def evaluate_sessions(
     interval: float = CAPTURE_INTERVAL,
     open_frames: int = OPEN_FRAMES,
     close_frames: int = CLOSE_FRAMES,
+    labels: str = "agent",
 ) -> dict[str, SessionScore]:
     """Score predicted sessions per bay and overall ("all") on labeled captures.
 
@@ -171,7 +189,7 @@ def evaluate_sessions(
     because build_sessions ends sessions at gaps on both sides.
     """
     scores = {}
-    for bay_id, (labeled, detected) in paired_frames(database).items():
+    for bay_id, (labeled, detected) in paired_frames(database, labels).items():
         truth = build_sessions(bay_id, labeled, interval, 1, 1)
         predicted = build_sessions(
             bay_id, detected, interval, open_frames, close_frames
@@ -181,11 +199,19 @@ def evaluate_sessions(
     return scores
 
 
-def run(open_frames: int = OPEN_FRAMES, close_frames: int = CLOSE_FRAMES) -> None:
+def run(
+    open_frames: int = OPEN_FRAMES,
+    close_frames: int = CLOSE_FRAMES,
+    labels: str = "agent",
+) -> None:
     """Print session scores for the server database with the given thresholds."""
     scores = evaluate_sessions(
-        DATABASE_PATH, open_frames=open_frames, close_frames=close_frames
+        DATABASE_PATH,
+        open_frames=open_frames,
+        close_frames=close_frames,
+        labels=labels,
     )
+    print(f"Scored against {labels} labels")
     print(f"Thresholds: open after {open_frames}, close after {close_frames} frames")
     print(
         f"{'bay':<6} {'true':>5} {'pred':>5} {'match':>6} {'miss':>5} {'phantom':>8} "
@@ -199,8 +225,8 @@ def run(open_frames: int = OPEN_FRAMES, close_frames: int = CLOSE_FRAMES) -> Non
             f"{score.mean_duration_error_s:>6.1f} {score.true_minutes:>9.1f} "
             f"{score.predicted_minutes:>9.1f}"
         )
-    # Carried-forward counts saved without review look like ground truth here.
-    print(
-        "Labels are only as reliable as the labeling session: counts carried "
-        "forward in the labeling tab and saved unchecked are scored as truth."
-    )
+    if labels == "agent":
+        print(
+            "Agent labels: these numbers measure agreement with the labeling agent, "
+            "not accuracy."
+        )

@@ -80,7 +80,7 @@ def database(tmp_path):
     return path
 
 
-def bays_metadata(counts):
+def bays_metadata(counts, **extra):
     """Metadata with the given bay_1 count and an empty bay_0."""
     return json.dumps(
         {
@@ -89,13 +89,14 @@ def bays_metadata(counts):
                     {"bay_id": "bay_0", "vehicle_count": 0},
                     {"bay_id": "bay_1", "vehicle_count": counts},
                 ]
-            }
+            },
+            **extra,
         }
     )
 
 
-def insert(database, labeled, detected):
-    """Store frames with labels (None for unlabeled) and detections for bay_1."""
+def insert(database, labeled, detected, labeled_by="agent:X/y"):
+    """Store frames with agent labels (None for unlabeled) and detections for bay_1."""
     with closing(sqlite3.connect(database)) as connection, connection:
         for index, (label, count) in enumerate(zip(labeled, detected, strict=True)):
             name = f"{index}.jpg"
@@ -107,7 +108,12 @@ def insert(database, labeled, detected):
             if label is not None:
                 connection.execute(
                     "INSERT INTO image_labels (image_path, metadata) VALUES (?, ?)",
-                    (name, bays_metadata(label)),
+                    (
+                        name,
+                        bays_metadata(label, labeled_by=labeled_by)
+                        if labeled_by
+                        else bays_metadata(label),
+                    ),
                 )
 
 
@@ -147,3 +153,12 @@ def test_evaluate_ignores_unlabeled_frames(database):
     scores = session_eval.evaluate_sessions(database, INTERVAL)
 
     assert scores["all"].predicted_sessions == 0
+
+
+def test_evaluate_scores_only_the_chosen_label_source(database):
+    """Human labels are ignored when scoring against agent labels, and vice versa."""
+    insert(database, [0, 1, 1, 1, 0, 0], [0, 1, 1, 1, 0, 0], labeled_by=None)
+
+    assert session_eval.evaluate_sessions(database, INTERVAL)["all"].true_sessions == 0
+    human = session_eval.evaluate_sessions(database, INTERVAL, labels="human")
+    assert human["all"].true_sessions == 1
