@@ -13,7 +13,7 @@ from wsgiref.util import setup_testing_defaults
 import pytest
 from werkzeug import serving
 
-from wash_cam import config, dashboard
+from wash_cam import config, dashboard, evaluate, labeling
 from wash_cam.cli import main
 from wash_cam.config import BAYS
 
@@ -369,3 +369,45 @@ def test_inherits_counts_only_without_a_saved_record(
         check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_dashboard_save_keeps_agent_provenance(request_dashboard, tmp_path):
+    """Saving counts updates only vehicles; agent provenance survives, so the row stays an agent label."""
+    dashboard.IMAGES_DIR.mkdir()
+    (dashboard.IMAGES_DIR / "capture.jpg").write_bytes(b"photo")
+    batch = tmp_path / "batch"
+    batch.mkdir()
+    labels = batch / "labels.jsonl"
+    labels.write_text(
+        json.dumps(
+            {
+                "image_path": "capture.jpg",
+                "counts": {"bay_0": 1},
+                "labeled_by": "agent:X/y",
+                "uncertain_bays": ["bay_0"],
+                "notes": "foam",
+            }
+        )
+        + "\n"
+    )
+    labeling.import_labels(labels, dashboard.IMAGES_DIR, dashboard.DATABASE_PATH)
+
+    # Navigation in the labeling tab triggers exactly this save.
+    status = request_dashboard(
+        "/api/labels", "POST", {"image_path": "capture.jpg", "counts": all_bays(2)}
+    )[0]
+
+    assert status == "200 OK"
+    with sqlite3.connect(dashboard.DATABASE_PATH) as connection:
+        (stored,) = connection.execute("SELECT metadata FROM image_labels").fetchone()
+    metadata = json.loads(stored)
+    assert metadata["labeled_by"] == "agent:X/y"
+    assert metadata["uncertain_bays"] == ["bay_0"]
+    assert metadata["notes"] == "foam"
+    assert {bay["vehicle_count"] for bay in metadata["vehicles"]["bays"]} == {2}
+    assert "capture.jpg" in evaluate.load_labels(dashboard.DATABASE_PATH, "agent")
+    # The agent can still replace its own row.
+    result = labeling.import_labels(
+        labels, dashboard.IMAGES_DIR, dashboard.DATABASE_PATH
+    )
+    assert result.imported == 1

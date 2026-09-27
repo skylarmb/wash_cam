@@ -106,9 +106,16 @@ def load_labels(database: Path, labels: str = "agent") -> dict[str, Counts]:
 
 
 def score(labels: list[Counts], predictions: list[Counts]) -> Score:
-    """Compare predictions with labels image by image, skipping unlabeled bays."""
-    bays = correct_bays = correct_images = total_error = 0
+    """Compare predictions with labels image by image, skipping unlabeled bays.
+
+    A frame with no labeled bays (every bay omitted as unjudgeable) is left
+    out entirely; otherwise it would count as a correct image.
+    """
+    images = bays = correct_bays = correct_images = total_error = 0
     for labeled, predicted in zip(labels, predictions, strict=True):
+        if not labeled:
+            continue
+        images += 1
         pairs = [(want, predicted[bay_id]) for bay_id, want in labeled.items()]
         errors = [abs(want - got) for want, got in pairs]
         bays += len(pairs)
@@ -118,10 +125,10 @@ def score(labels: list[Counts], predictions: list[Counts]) -> Score:
 
     # An empty group scores zero rather than dividing by zero.
     return Score(
-        images=len(labels),
+        images=images,
         bays=bays,
         bay_accuracy=correct_bays / bays if bays else 0.0,
-        image_accuracy=correct_images / len(labels) if labels else 0.0,
+        image_accuracy=correct_images / images if images else 0.0,
         mean_absolute_error=total_error / bays if bays else 0.0,
     )
 

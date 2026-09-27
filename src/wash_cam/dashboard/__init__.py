@@ -49,18 +49,26 @@ def valid_counts(counts):
 
 
 def save_label(name, counts):
-    """Replace every bay count and update the verification time atomically."""
-    metadata = {
-        "vehicles": {
-            "bays": [
-                {"bay_id": bay_id, "vehicle_count": counts[bay_id]} for bay_id in BAYS
-            ]
-        }
-    }
+    """Replace every bay count and update the verification time atomically.
+
+    Only `vehicles` changes. Other metadata keys, such as an agent label's
+    `labeled_by`, `uncertain_bays`, and `notes`, are kept: navigating the
+    labeling tab saves automatically, so a save must not turn an unchecked
+    agent label into what looks like a human label.
+    """
     with (
         closing(sqlite3.connect(f"{DATABASE_PATH.as_uri()}?mode=rw", uri=True)) as db,
         db,
     ):
+        row = db.execute(
+            "SELECT metadata FROM image_labels WHERE image_path = ?", (name,)
+        ).fetchone()
+        metadata = json.loads(row[0]) if row else {}
+        metadata["vehicles"] = {
+            "bays": [
+                {"bay_id": bay_id, "vehicle_count": counts[bay_id]} for bay_id in BAYS
+            ]
+        }
         db.execute(
             "INSERT INTO image_labels (image_path, metadata) VALUES (?, ?) "
             "ON CONFLICT(image_path) DO UPDATE SET metadata = excluded.metadata, "

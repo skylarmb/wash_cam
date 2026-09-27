@@ -104,7 +104,7 @@ Send `POST /api/labels` with `Content-Type: application/json`:
 `counts` maps every bay ID to its count, with no missing or extra IDs.
 Each count must be a nonnegative integer.
 A successful request returns `{"saved": true}`.
-The API replaces the image's metadata with these counts and sets the current UTC verification time.
+The API replaces the image's `vehicles` counts, keeps its other metadata keys (such as an agent label's `labeled_by`), and sets the current UTC verification time.
 Invalid counts return HTTP 400. Database failures return HTTP 503.
 Only images without a database record inherit the last counts saved in this browser tab.
 Any stored metadata object blocks inheritance, including `{}` or null bay fields.

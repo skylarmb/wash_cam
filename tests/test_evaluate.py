@@ -135,3 +135,15 @@ def test_load_labels_separates_agent_and_human_labels(database):
     assert set(evaluate.load_labels(database)) == {"agent.jpg"}
     assert set(evaluate.load_labels(database, "agent")) == {"agent.jpg"}
     assert set(evaluate.load_labels(database, "human")) == {"human.jpg"}
+
+
+def test_frames_with_no_labeled_bays_do_not_count():
+    """An all-omitted label is not a correct image; it is left out of every denominator."""
+    labels = [{}, {"bay_0": 1}]
+    predictions = [all_bays(1), all_bays(0)]
+
+    score = evaluate.score(labels, predictions)
+
+    assert score.images == 1
+    assert score.bays == 1
+    assert score.image_accuracy == 0.0
