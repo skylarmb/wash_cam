@@ -64,10 +64,11 @@ agents which migration number you take before you write it.
 | Step 5: `label-export` and label importer | `src/wash_cam/labeling.py`, CLI commands, tests | SapphireCompass (done, `6615591`) |
 | Step 7: capture heartbeat (alerts go to `NOTIFICATIONS.md`) | `src/wash_cam/heartbeat.py` and its tests, one entry in `scripts/install_services.sh` | ScarletEagle (done, deployed `0f02100`) |
 | 2. Step 5: agent labeling of the first batch (StormyCliff blind-checks about 30 frames before import) | label files only, no code | SilentIsland (done: 537 frames imported, blind check 138/138) |
-| 3. Step 7: nightly backups | `scripts/backup_db.sh`, one entry in `scripts/install_services.sh` | SilentIsland |
-| 4. Step 6: Analytics tab without revenue (heatmap, utilization, durations) | `src/wash_cam/dashboard/analytics.py` and its tests, route registration in `dashboard/__init__.py` | SilentIsland (rebuild from the approved design) |
-| Step 5: threshold tuning (after labels are imported) | `src/wash_cam/sessions.py` | SilentIsland |
-| Step 4 and revenue in step 6 (pricing known) | `config.py` pricing, a revenue function, the Analytics tab | SilentIsland (after the analytics deploy) |
+| 3. Step 7: nightly backups | `scripts/backup_db.sh`, one entry in `scripts/install_services.sh` | SilentIsland (done, deployed `88f4bcb`) |
+| 4. Step 6: Analytics tab without revenue (heatmap, utilization, durations) | `src/wash_cam/dashboard/analytics.py` and its tests, route registration in `dashboard/__init__.py` | SapphireCompass and SilentIsland (done, deployed `88aa130`) |
+| Step 5: threshold tuning (after labels are imported) | `src/wash_cam/sessions.py` | SilentIsland (first sweep done; retest `close 4` on the daytime batch) |
+| Step 5: daytime labeling batch (same export, blind check, import) | label files only | SilentIsland (next, when daylight captures exist) |
+| Step 4 and revenue in step 6 (pricing known) | `config.py` pricing, a revenue function, the Analytics tab | SilentIsland (done, deployed `5f0b8da` and `bd616a4`) |
 | Coordination: `plan.md` status and `AGENTS.md` | `plan.md`, `AGENTS.md` | ScarletEagle |
 | QA: correctness, validation, simplicity, and scope reviews | review findings only | StormyCliff |
 
