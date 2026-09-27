@@ -51,14 +51,20 @@ class Session:
 
 
 def build_sessions(
-    bay_id: str, frames: Sequence[Frame], interval: float
+    bay_id: str,
+    frames: Sequence[Frame],
+    interval: float,
+    open_frames: int = OPEN_FRAMES,
+    close_frames: int = CLOSE_FRAMES,
 ) -> list[Session]:
     """Return the sessions in one bay's time-ordered frames.
 
-    A session opens after OPEN_FRAMES occupied frames in a row and closes after
-    CLOSE_FRAMES empty frames in a row. A pause longer than MAX_GAP_INTERVALS
-    intervals ends an open session with reason "gap". A session still occupied
-    at the last frame is returned with reason "open".
+    A session opens after open_frames occupied frames in a row and closes after
+    close_frames empty frames in a row: OPEN_FRAMES and CLOSE_FRAMES by default,
+    while session_eval uses 1 and 1 for human labels, which need no debouncing.
+    A pause longer than MAX_GAP_INTERVALS intervals ends an open session with
+    reason "gap". A session still occupied at the last frame is returned with
+    reason "open".
     """
     max_gap = timedelta(seconds=interval * MAX_GAP_INTERVALS)
     found: list[Session] = []
@@ -109,14 +115,14 @@ def build_sessions(
                 if empty_frames == 0:
                     empty_since = moment
                 empty_frames += 1
-                if empty_frames >= CLOSE_FRAMES:
+                if empty_frames >= close_frames:
                     close("left", empty_since)
                     visit, empty_frames = [], 0
         elif count > 0:
             if not pending:
                 pending_before = previous
             pending.append((moment, count))
-            if len(pending) >= OPEN_FRAMES:
+            if len(pending) >= open_frames:
                 visit, visit_before, pending = pending, pending_before, []
         else:
             pending = []
