@@ -135,7 +135,8 @@ agents which migration number you take before you write it.
   - SapphireCompass builds `label-export`, which writes images with bay
     overlays and a manifest but no detections, and an importer.
   - SapphireCompass labels with its own vision model and never reads
-    `image_detections`. StormyCliff (QA) reviews the rubric and a sample of\n    the labels before the first batch is imported.
+    `image_detections`. StormyCliff (QA) reviews the rubric and a sample of
+    the labels before the first batch is imported.
   - Each agent label records `"labeled_by": "agent:<name>/<model>"` in
     `image_labels.metadata`. A later human check records `"reviewed_by"`. The
     importer never overwrites a label without `labeled_by`.
