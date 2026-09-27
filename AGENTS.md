@@ -236,6 +236,15 @@ If the `mcp-agent-mail` tools are not available to you, onboard your machine:
    For other agents, add an HTTP MCP server with the same URL and `Authorization` header.
    If `ssh` fails with a host key prompt or error, stop and ask the user to connect to `mini` one time by hand.
 4. Restart the agent. Call `health_check` and make sure that it returns `"status": "ok"`.
+5. Set up the mail watcher (see "Wait for mail" below). If you are not on the mini, copy the watcher script and write the env file. Run this as one command:
+
+   ```sh
+   mkdir -p ~/.local/share/mcp_agent_mail/scripts/hooks ~/.config/agent_mail &&
+   scp skylar@mini:.local/share/mcp_agent_mail/scripts/hooks/check_inbox.sh ~/.local/share/mcp_agent_mail/scripts/hooks/ &&
+   (umask 077; printf 'AGENT_MAIL_PROJECT=/Users/skylar/workspace/wash_cam\nAGENT_MAIL_URL=http://mini.tail951c67.ts.net:8765/api/\nAGENT_MAIL_TOKEN=%s\n' "$(ssh skylar@mini "sed -n 's/^HTTP_BEARER_TOKEN=//p' ~/.local/share/mcp_agent_mail/.env")" > ~/.config/agent_mail/env)
+   ```
+
+   The env file has mode 600 and stays outside the repo. On the mini, the script and the env file already exist.
 
 Rules for every task:
 
@@ -243,7 +252,27 @@ Rules for every task:
 - At the start of a task, call `macro_start_session`. This registers your agent and returns your inbox.
 - Before you edit files, reserve them with `file_reservation_paths`. After you finish, release them with `release_file_reservations`.
 - Check your inbox with `fetch_inbox` between steps, and reply to messages that ask you something.
+- After you handle a message, mark it read with `mark_message_read`, or acknowledge it with `acknowledge_message`. The watcher counts unread mail, so an unread message wakes you again.
 - `mcp-agent-mail` is not a shell command. Use only the MCP tools.
+
+#### Wait for mail
+
+Mail does not wake an idle agent. Claude Code starts a new turn when a background command exits. The watcher uses this: it blocks until you have unread mail, then exits.
+
+1. Before you end a turn with no work left, start the watcher as one Bash command with `run_in_background`. Replace the two placeholders with your values from `macro_start_session`:
+
+   ```sh
+   set -a; . ~/.config/agent_mail/env; AGENT_MAIL_AGENT=<agent name>; AGENT_MAIL_REGISTRATION_TOKEN=<registration token>; AGENT_MAIL_INTERVAL=0; set +a
+   until out=$(~/.local/share/mcp_agent_mail/scripts/hooks/check_inbox.sh); [ -n "$out" ]; do sleep 15; done; echo "$out"
+   ```
+
+2. When the watcher exits, read your unread mail with `fetch_inbox` and `unread_only: true`.
+3. Handle each message, then mark it read or acknowledge it.
+4. Start the watcher again.
+
+Start only one watcher at a time. The watcher calls the server with `curl` every 15 seconds and uses no model tokens. It stops when the session closes.
+
+A busy agent can also get mail reminders between tool calls from a `PostToolUse` hook that runs `check_inbox.sh` with `AGENT_MAIL_INTERVAL=60`. This hook changes the user's Claude Code settings, so add it only if the user asks for it.
 
 ### Docs
 
