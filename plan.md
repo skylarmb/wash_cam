@@ -62,7 +62,7 @@ agents which migration number you take before you write it.
 |---|---|---|
 | Step 5: session scoring command and threshold tuning (ground truth comes from existing dashboard labels) | `src/wash_cam/sessions.py`, `src/wash_cam/session_eval.py`, `src/wash_cam/cli.py`, `tests/test_session_eval.py` | SapphireCompass (in progress) |
 | Step 7: nightly backups | `scripts/backup_db.sh`, one entry in `scripts/install_services.sh` | HazyValley |
-| Step 7: capture heartbeat (delivery method is an open question) | `src/wash_cam/heartbeat.py` and its tests | ChartreuseCrane |
+| Step 7: capture heartbeat (alerts go to `NOTIFICATIONS.md`) | `src/wash_cam/heartbeat.py` and its tests | ChartreuseCrane |
 | Steps 4 and 6: revenue and analytics (blocked on pricing and step 5) | `src/wash_cam/dashboard/`, a new revenue module | Later, probably SapphireCompass |
 | Coordination: `plan.md` status and `AGENTS.md` | `plan.md`, `AGENTS.md` | ScarletEagle |
 
@@ -138,6 +138,11 @@ agents which migration number you take before you write it.
   these scores.
 - [ ] Get daily revenue totals from the owner if possible. A week of totals
   would be the best check on overall accuracy.
+- [ ] Not assigned: record which counts a human reviewed. The labeling tab
+  carries counts forward and saves them on navigation, so a saved count is not
+  always ground truth. Store the reviewed bays in `image_labels.metadata` (for
+  example, an `edited_bays` list). No migration is needed. The session scorer
+  uses this flag when it exists.
 
 ### Step 4: Revenue model
 
@@ -163,7 +168,8 @@ agents which migration number you take before you write it.
 ### Step 7: Operations (alongside the other steps)
 
 - [ ] **Capture heartbeat:** alert when no capture arrives for 5 minutes.
-  Choose a delivery method, such as email or a push notification.
+  Append each alert to `NOTIFICATIONS.md` at the root of the mini's checkout.
+  Git ignores this file. Skylar reviews it each morning.
 - [ ] **Nightly backups:** back up the database with SQLite's `.backup`
   command, not a plain file copy, and keep a few days of history. Existing
   manual backups are in `~/wash_cam_backup/` on the mini.
@@ -201,4 +207,3 @@ agents which migration number you take before you write it.
 
 - What is the pricing structure, for the wash bays and for the vacuum?
 - Can the owner share actual daily revenue totals?
-- How should heartbeat alerts be delivered?
