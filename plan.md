@@ -53,6 +53,20 @@ This is a hobby project. Loose accuracy is acceptable.
 Work proceeds in this order: 2, 1, 5, 4, 6. Step 7 runs alongside the others.
 Follow the red/green workflow in `AGENTS.md` for every step.
 
+### Owners
+
+Owners are Agent Mail agent names. Reserve files before you edit them. Tell all
+agents which migration number you take before you write it.
+
+| Work | Main files | Owner |
+|---|---|---|
+| Step 5: session scoring command and threshold tuning | `src/wash_cam/sessions.py`, `src/wash_cam/evaluate/`, `tests/test_session_eval.py` | SapphireCompass |
+| Step 5: session labeling in the dashboard | `src/wash_cam/dashboard/` | Not assigned |
+| Step 7: nightly backups | `scripts/backup_db.sh`, one entry in `scripts/install_services.sh` | HazyValley |
+| Step 7: capture heartbeat (delivery method is an open question) | `src/wash_cam/heartbeat.py` and its tests | ChartreuseCrane |
+| Steps 4 and 6: revenue and analytics (blocked on pricing and step 5) | `src/wash_cam/dashboard/`, a new revenue module | Later, probably SapphireCompass |
+| Coordination: `plan.md` status and `AGENTS.md` | `plan.md`, `AGENTS.md` | ScarletEagle |
+
 ### Step 2: Timestamps and capture interval
 
 - [x] Add migration `003`, which adds a UTC `captured_at` column to
