@@ -9,3 +9,4 @@ tmp/
 /config.yaml
 /calibration/
 .DS_Store
+/db/*.sqlite3-*

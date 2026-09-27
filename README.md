@@ -72,6 +72,13 @@ Modules access the typed field as `config.example`. Callers cannot change fields
 The loader raises `wash_cam.config.ConfigError` for missing, unreadable, or invalid files.
 Missing-file errors include the copy instruction. The loader does not supply defaults or merge the example file.
 
+## Store verified image labels
+
+The SQLite database at `db/labels.sqlite3` stores flexible JSON metadata for each verified image.
+Each image can include labels for multiple bays.
+See [the database documentation](db/README.md) for the schema, metadata convention, and migration command.
+Database inputs are planned for a future iteration.
+
 ## Run unit tests
 
 `uv sync --locked` installs pytest as a development dependency. Run the full suite:
