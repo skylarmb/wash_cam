@@ -34,13 +34,16 @@ CAMERA_CROP_BOX = (390, 250, 1660, 590)
 # belongs to a bay when the bottom-center of its box, where its wheels meet the
 # ground, falls inside that bay's quad; this excludes cars queueing in the
 # foreground and cars parked behind the bays, whose boxes can still overlap it.
+# The back edge sits at y=115, not the painted floor's y=95: a car parked
+# behind bay 3 at night had its box bottom at y=95-100, while cars in a bay
+# have box bottoms at y=150-170.
 # Review with `wash-cam bays` after any change.
 BAY_POLYGONS = (
-    ((145, 95), (268, 95), (268, 170), (85, 170)),
-    ((310, 95), (468, 95), (468, 175), (300, 175)),
-    ((485, 95), (648, 95), (655, 170), (480, 175)),
-    ((772, 95), (898, 95), (935, 172), (768, 172)),
-    ((965, 95), (1078, 95), (1135, 165), (962, 170)),
+    ((129, 115), (268, 115), (268, 170), (85, 170)),
+    ((308, 115), (468, 115), (468, 175), (300, 175)),
+    ((484, 115), (650, 115), (655, 170), (480, 175)),
+    ((771, 115), (908, 115), (935, 172), (768, 172)),
+    ((964, 115), (1094, 115), (1135, 165), (962, 170)),
 )
 
 # A capture is night when more than NIGHT_DARK_FRACTION of its pixels are darker

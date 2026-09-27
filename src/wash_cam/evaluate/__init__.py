@@ -17,6 +17,7 @@ from wash_cam.config import (
     DARK_PIXEL_LEVEL,
     NIGHT_DARK_FRACTION,
 )
+from wash_cam.detect import VehicleDetector
 
 __all__ = [
     "MODELS",
@@ -54,7 +55,10 @@ class EmptyPredictor:
 
 
 # Models selectable from the CLI by name.
-MODELS: dict[str, Callable[[], Predictor]] = {"empty": EmptyPredictor}
+MODELS: dict[str, Callable[[], Predictor]] = {
+    "empty": EmptyPredictor,
+    "detector": VehicleDetector,
+}
 
 
 @dataclass(frozen=True)

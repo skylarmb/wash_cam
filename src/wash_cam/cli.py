@@ -3,7 +3,7 @@
 import argparse
 from pathlib import Path
 
-from wash_cam import bays, camera, dashboard, dummy, evaluate
+from wash_cam import bays, camera, dashboard, detect, dummy, evaluate
 from wash_cam.camera import calibrate
 
 
@@ -53,6 +53,22 @@ def main() -> None:
         help="Model to score.",
     )
     command.set_defaults(run=evaluate.run)
+    command = commands.add_parser(
+        "detect", help="Count vehicles per bay and save review overlays."
+    )
+    command.add_argument(
+        "images",
+        nargs="*",
+        type=Path,
+        help="Images to detect in. Defaults to every capture in images/.",
+    )
+    command.add_argument(
+        "--output",
+        type=Path,
+        default=detect.REVIEW_DIR,
+        help="Directory for the overlays. Defaults to tmp/detections/.",
+    )
+    command.set_defaults(run=detect.run)
     args = parser.parse_args()
     arguments = vars(args)
     arguments.pop("command", None)

@@ -41,8 +41,12 @@ def test_assign_to_bay_ignores_cars_outside_the_bays():
     # Its box overlaps bay 3, but its wheels are behind the floor polygon.
     parked_behind = box_standing_at((810, 80))
 
+    # The night red car behind bay 3, whose box bottom touches the bay's back.
+    parked_at_back = (771.0, 9.0, 852.0, 100.0)
+
     assert bays.assign_to_bay(queueing) is None
     assert bays.assign_to_bay(parked_behind) is None
+    assert bays.assign_to_bay(parked_at_back) is None
 
 
 def test_draw_bays_marks_a_copy_of_the_image():
