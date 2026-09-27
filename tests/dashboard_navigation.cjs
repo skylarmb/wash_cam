@@ -12,7 +12,11 @@ const links = ['previous', 'next'].map(name => ({
   href: `/labeling?image_path=${name}.jpg`,
   addEventListener(type, callback) { this[type] = callback; }
 }));
-const inputs = (keyboard ? [0, 0, 0, 0, 0] : [2, 0, 1, 0, 3]).map(value => ({
+const bayIds = ['bay_0', 'bay_1', 'bay_2', 'bay_3', 'bay_4', 'vac_0'];
+// Key a list of counts by bay ID, in page order.
+const keyed = counts => Object.fromEntries(bayIds.map((id, index) => [id, counts[index]]));
+const inputs = (keyboard ? [0, 0, 0, 0, 0, 0] : [2, 0, 1, 0, 3, 1]).map((value, index) => ({
+  id: bayIds[index],
   value,
   focus() { focused = this; },
   stepUp() { this.value = Number(this.value) + 1; },
@@ -60,8 +64,8 @@ vm.runInNewContext(fs.readFileSync(0, 'utf8'), context);
       await inputs[3].keydown(space);
       assert.equal(focused, inputs[4]);
     } else {
-      inputs[4].focus();
-      await inputs[4].keydown(space);
+      inputs[5].focus();
+      await inputs[5].keydown(space);
       assert.equal(focused, elements.save);
     }
     await elements.labels.submit({preventDefault() { prevented = true; }});
@@ -75,7 +79,7 @@ vm.runInNewContext(fs.readFileSync(0, 'utf8'), context);
     return;
   }
   assert.deepEqual(events[0], ['save', '/api/labels', {
-    image_path: 'capture.jpg', counts: direction === 'keyboard' ? [0, 0, 1, 1, 0] : direction === 'last_space' ? [0, 0, 0, 0, 1] : [2, 0, 1, 0, 3]
+    image_path: 'capture.jpg', counts: keyed(direction === 'keyboard' ? [0, 0, 1, 1, 0, 0] : direction === 'last_space' ? [0, 0, 0, 0, 0, 1] : [2, 0, 1, 0, 3, 1])
   }]);
   if (outcome === 'success') {
     assert.deepEqual(events[1], ['navigate', links[keyboard ? 1 : direction].href]);

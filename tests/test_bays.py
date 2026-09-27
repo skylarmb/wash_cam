@@ -4,12 +4,12 @@ import cv2
 import numpy as np
 
 from wash_cam import bays
-from wash_cam.config import BAY_POLYGONS
+from wash_cam.config import BAYS
 
 
-def floor_center(bay_index):
+def floor_center(bay_id):
     """Return a point inside a bay's floor polygon."""
-    points = np.array(BAY_POLYGONS[bay_index], dtype=np.float64)
+    points = np.array(BAYS[bay_id], dtype=np.float64)
     return points.mean(axis=0)
 
 
@@ -19,20 +19,28 @@ def box_standing_at(point, width=100, height=60):
     return (x - width / 2, y - height, x + width / 2, y)
 
 
-def test_bay_polygons_are_ordered_left_to_right():
-    """Index 0 is the leftmost bay, matching the labeling convention."""
-    centers = [floor_center(index)[0] for index in range(len(BAY_POLYGONS))]
+def test_bays_are_the_wash_bays_left_to_right_then_the_vacuum():
+    """Wash bay IDs count up from the leftmost bay; the vacuum has its own prefix."""
+    wash_bays = [bay_id for bay_id in BAYS if bay_id.startswith("bay_")]
+    centers = [floor_center(bay_id)[0] for bay_id in wash_bays]
 
-    assert len(BAY_POLYGONS) == 5
+    assert list(BAYS) == ["bay_0", "bay_1", "bay_2", "bay_3", "bay_4", "vac_0"]
     assert centers == sorted(centers)
 
 
 def test_assign_to_bay_uses_the_ground_contact_point():
     """A car standing on a bay floor belongs to that bay."""
-    for index in range(len(BAY_POLYGONS)):
-        box = box_standing_at(floor_center(index))
+    for bay_id in BAYS:
+        box = box_standing_at(floor_center(bay_id))
 
-        assert bays.assign_to_bay(box) == index
+        assert bays.assign_to_bay(box) == bay_id
+
+
+def test_assign_to_bay_counts_a_vacuuming_car_cut_off_by_the_frame():
+    """A car at the vacuum whose box is clipped at the bottom edge still counts."""
+    clipped = (20.0, 230.0, 170.0, 340.0)
+
+    assert bays.assign_to_bay(clipped) == "vac_0"
 
 
 def test_assign_to_bay_ignores_cars_outside_the_bays():
@@ -40,7 +48,6 @@ def test_assign_to_bay_ignores_cars_outside_the_bays():
     queueing = box_standing_at((800, 290))
     # Its box overlaps bay 3, but its wheels are behind the floor polygon.
     parked_behind = box_standing_at((810, 80))
-
     # The night red car behind bay 3, whose box bottom touches the bay's back.
     parked_at_back = (771.0, 9.0, 852.0, 100.0)
 
@@ -58,7 +65,7 @@ def test_draw_bays_marks_a_copy_of_the_image():
     assert overlay.shape == image.shape
     assert not image.any()
     # A polygon corner lies on the drawn outline.
-    x, y = BAY_POLYGONS[0][0]
+    x, y = BAYS["bay_0"][0]
     assert overlay[y, x].any()
 
 

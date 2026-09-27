@@ -15,6 +15,12 @@ from werkzeug import serving
 
 from wash_cam import dashboard
 from wash_cam.cli import main
+from wash_cam.config import BAYS
+
+
+def all_bays(count):
+    """Return the same count for every region, keyed by bay ID."""
+    return dict.fromkeys(BAYS, count)
 
 
 def test_serves_committed_images_from_any_working_directory(monkeypatch, tmp_path):
@@ -146,30 +152,34 @@ def test_labeling_loads_saved_counts_and_updates_one_image(request_dashboard):
     """Save all bays, load their inputs, and replace the verified record."""
     dashboard.IMAGES_DIR.mkdir()
     (dashboard.IMAGES_DIR / "capture.jpg").write_bytes(b"selected photo")
-    payload = {"image_path": "capture.jpg", "counts": [2, 0, 1, 0, 3]}
+    payload = {
+        "image_path": "capture.jpg",
+        "counts": dict(zip(BAYS, [2, 0, 1, 0, 3, 1])),
+    }
     assert request_dashboard("/api/labels?image_path=capture.jpg")[2] == b"null"
     assert request_dashboard("/api/labels", "POST", payload)[0] == "200 OK"
     status, _, body = request_dashboard("/labeling?image_path=capture.jpg")
     assert status == "200 OK"
     assert b'http-equiv="refresh"' not in body
-    for bay, count in enumerate(payload["counts"]):
+    for bay, count in payload["counts"].items():
         assert (
-            f'id="bay_{bay}" name="bay_{bay}" type="number" min="0" step="1" required value="{count}"'.encode()
+            f'id="{bay}" name="{bay}" type="number" min="0" step="1" required value="{count}"'.encode()
             in body
         )
+    assert b"Vacuum 0" in body
     assert request_dashboard("/image?image_path=capture.jpg")[2] == b"selected photo"
     with sqlite3.connect(dashboard.DATABASE_PATH) as connection:
         connection.execute(
             "UPDATE image_labels SET verified_at = '2000-01-01 00:00:00'"
         )
-    payload["counts"] = [0, 1, 2, 3, 4]
+    payload["counts"] = dict(zip(BAYS, [0, 1, 2, 3, 4, 5]))
     assert request_dashboard("/api/labels", "POST", payload)[0] == "200 OK"
     saved = json.loads(request_dashboard("/api/labels?image_path=capture.jpg")[2])
     assert saved["metadata"] == {
         "vehicles": {
             "bays": [
-                {"bay_id": f"bay_{i}", "vehicle_count": count}
-                for i, count in enumerate(payload["counts"])
+                {"bay_id": bay, "vehicle_count": count}
+                for bay, count in payload["counts"].items()
             ]
         }
     }
@@ -183,12 +193,13 @@ def test_labeling_loads_saved_counts_and_updates_one_image(request_dashboard):
 @pytest.mark.parametrize(
     "counts",
     [
-        [0] * 4,
-        [0] * 6,
-        [-1, 0, 0, 0, 0],
-        [True, 0, 0, 0, 0],
-        [1.5, 0, 0, 0, 0],
-        ["1", 0, 0, 0, 0],
+        {bay: 0 for bay in list(BAYS)[:-1]},
+        {**all_bays(0), "bay_9": 0},
+        {**all_bays(0), "bay_0": -1},
+        {**all_bays(0), "bay_0": True},
+        {**all_bays(0), "bay_0": 1.5},
+        {**all_bays(0), "bay_0": "1"},
+        [0] * len(BAYS),
         None,
     ],
 )
@@ -213,7 +224,7 @@ def test_rejects_unknown_images(request_dashboard, name):
     """Restrict labels and image reads to available captures."""
     assert (
         request_dashboard(
-            "/api/labels", "POST", {"image_path": name, "counts": [0] * 5}
+            "/api/labels", "POST", {"image_path": name, "counts": all_bays(0)}
         )[0]
         == "404 Not Found"
     )
@@ -226,12 +237,12 @@ def test_labeling_empty_and_unlabeled_states(request_dashboard):
     dashboard.IMAGES_DIR.mkdir()
     (dashboard.IMAGES_DIR / "capture.jpg").write_bytes(b"photo")
     body = request_dashboard("/labeling")[2]
-    assert body.count(b'required value="0"') == 5
+    assert body.count(b'required value="0"') == len(BAYS)
     assert b"Save verified labels" in body
     assert b"Data labeling" in request_dashboard("/")[2]
 
 
-@pytest.mark.parametrize("payload", [[], "invalid", {"counts": [0] * 5}])
+@pytest.mark.parametrize("payload", [[], "invalid", {"counts": all_bays(0)}])
 def test_rejects_invalid_payload(request_dashboard, payload):
     """Return a client error for invalid request objects or missing images."""
     status, _, _ = request_dashboard("/api/labels", "POST", payload)
@@ -244,11 +255,11 @@ def test_selected_image_has_its_own_values(request_dashboard):
     for name, count in [("first.jpg", 2), ("second.jpg", 4)]:
         (dashboard.IMAGES_DIR / name).write_bytes(b"photo")
         request_dashboard(
-            "/api/labels", "POST", {"image_path": name, "counts": [count] * 5}
+            "/api/labels", "POST", {"image_path": name, "counts": all_bays(count)}
         )
     for name, count in [("first.jpg", 2), ("second.jpg", 4)]:
         body = request_dashboard(f"/labeling?image_path={name}")[2]
-        assert body.count(f'required value="{count}"'.encode()) == 5
+        assert body.count(f'required value="{count}"'.encode()) == len(BAYS)
         assert f"/image?image_path={name}".encode() in body
 
 
@@ -258,7 +269,7 @@ def test_missing_database_returns_error_without_creating_file(request_dashboard)
     (dashboard.IMAGES_DIR / "capture.jpg").write_bytes(b"photo")
     dashboard.DATABASE_PATH.unlink()
     status, _, body = request_dashboard(
-        "/api/labels", "POST", {"image_path": "capture.jpg", "counts": [0] * 5}
+        "/api/labels", "POST", {"image_path": "capture.jpg", "counts": all_bays(0)}
     )
     assert status == "503 Service Unavailable"
     assert "unavailable" in json.loads(body)["error"]
@@ -331,14 +342,14 @@ def test_dashboard_reloads_by_default(monkeypatch):
 @pytest.mark.parametrize(
     ("metadata", "expected"),
     [
-        (None, [2, 0, 1, 0, 3]),
-        ({}, [0] * 5),
-        ({"vehicles": None}, [0] * 5),
-        ({"vehicles": {"bays": [{"bay_id": "bay_0", "vehicle_count": None}]}}, [0] * 5),
-        ({"vehicles": {"bays": [{"bay_id": "bay_0", "vehicle_count": 0}]}}, [0] * 5),
+        (None, [2, 0, 1, 0, 3, 1]),
+        ({}, [0] * 6),
+        ({"vehicles": None}, [0] * 6),
+        ({"vehicles": {"bays": [{"bay_id": "bay_0", "vehicle_count": None}]}}, [0] * 6),
+        ({"vehicles": {"bays": [{"bay_id": "bay_0", "vehicle_count": 0}]}}, [0] * 6),
         (
-            {"vehicles": {"bays": [{"bay_id": "bay_0", "vehicle_count": 4}]}},
-            [4, 0, 0, 0, 0],
+            {"vehicles": {"bays": [{"bay_id": "vac_0", "vehicle_count": 4}]}},
+            [0, 0, 0, 0, 0, 4],
         ),
     ],
 )

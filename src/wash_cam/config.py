@@ -28,23 +28,26 @@ MIN_CALIBRATION_INLIERS = 50
 # keeps it pointed at the same part of the scene when the camera is re-seated.
 CAMERA_CROP_BOX = (390, 250, 1660, 590)
 
-# Floor quad of each wash bay as (x, y) corners, indexed left to right from 0 to
-# match the label bay IDs. Expressed in cropped-capture coordinates (the image
-# CAMERA_CROP_BOX produces), which calibration keeps fixed on the scene. A car
-# belongs to a bay when the bottom-center of its box, where its wheels meet the
-# ground, falls inside that bay's quad; this excludes cars queueing in the
-# foreground and cars parked behind the bays, whose boxes can still overlap it.
-# The back edge sits at y=115, not the painted floor's y=95: a car parked
-# behind bay 3 at night had its box bottom at y=95-100, while cars in a bay
-# have box bottoms at y=150-170.
-# Review with `wash-cam bays` after any change.
-BAY_POLYGONS = (
-    ((129, 115), (268, 115), (268, 170), (85, 170)),
-    ((308, 115), (468, 115), (468, 175), (300, 175)),
-    ((484, 115), (650, 115), (655, 170), (480, 175)),
-    ((771, 115), (908, 115), (935, 172), (768, 172)),
-    ((964, 115), (1094, 115), (1135, 165), (962, 170)),
-)
+# Floor quad of each vehicle region as (x, y) corners, keyed by the bay ID
+# stored in label metadata. Wash bays are `bay_<n>`, numbered left to right
+# from 0; the vacuum station is `vac_<n>`. Expressed in cropped-capture
+# coordinates (the image CAMERA_CROP_BOX produces), which calibration keeps
+# fixed on the scene. A car belongs to a region when the bottom-center of its
+# box, where its wheels meet the ground, falls inside that region's quad; this
+# excludes cars queueing in the foreground and cars parked behind the bays,
+# whose boxes can still overlap it. The wash bay back edges sit at y=115, not
+# the painted floor's y=95: a car parked behind bay 3 at night had its box
+# bottom at y=95-100, while cars in a bay have box bottoms at y=150-170. The
+# vacuum quad runs to the frame's bottom edge (y=340), where the box of a car
+# cut off by the crop ends. Review with `wash-cam bays` after any change.
+BAYS = {
+    "bay_0": ((129, 115), (268, 115), (268, 170), (85, 170)),
+    "bay_1": ((308, 115), (468, 115), (468, 175), (300, 175)),
+    "bay_2": ((484, 115), (650, 115), (655, 170), (480, 175)),
+    "bay_3": ((771, 115), (908, 115), (935, 172), (768, 172)),
+    "bay_4": ((964, 115), (1094, 115), (1135, 165), (962, 170)),
+    "vac_0": ((0, 215), (180, 215), (205, 340), (0, 340)),
+}
 
 # A capture is night when more than NIGHT_DARK_FRACTION of its pixels are darker
 # than DARK_PIXEL_LEVEL (grayscale 0-255). Mean brightness cannot tell the two

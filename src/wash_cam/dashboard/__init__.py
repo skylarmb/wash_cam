@@ -9,10 +9,14 @@ from urllib.parse import parse_qs, urlencode
 
 from werkzeug import serving
 
+from wash_cam.config import BAYS
+
 # Resolve shared files from the checkout, regardless of the working directory.
 ROOT = Path(__file__).resolve().parents[3]
 IMAGES_DIR = ROOT / "images"
 DATABASE_PATH = ROOT / "db" / "labels.sqlite3"
+# Input titles for each bay ID prefix: wash bays and the vacuum station.
+BAY_TITLES = {"bay": "Bay", "vac": "Vacuum"}
 
 
 def image_names():
@@ -34,13 +38,27 @@ def read_label(name):
     return {"metadata": json.loads(row[0]), "verified_at": row[1]} if row else None
 
 
+def bay_title(bay_id):
+    """Turn a bay ID such as `vac_0` into an input title such as `Vacuum 0`."""
+    prefix, _, number = bay_id.partition("_")
+    return f"{BAY_TITLES[prefix]} {number}"
+
+
+def valid_counts(counts):
+    """Accept one nonnegative whole-number count for exactly the configured bays."""
+    return (
+        isinstance(counts, dict)
+        and set(counts) == set(BAYS)
+        and all(type(count) is int and count >= 0 for count in counts.values())
+    )
+
+
 def save_label(name, counts):
-    """Replace all five bay counts and update the verification time atomically."""
+    """Replace every bay count and update the verification time atomically."""
     metadata = {
         "vehicles": {
             "bays": [
-                {"bay_id": f"bay_{i}", "vehicle_count": count}
-                for i, count in enumerate(counts)
+                {"bay_id": bay_id, "vehicle_count": counts[bay_id]} for bay_id in BAYS
             ]
         }
     }
@@ -127,9 +145,9 @@ def labeling_page(names, name):
         for item in reversed(names)
     )
     inputs = "".join(
-        f'<label for="bay_{i}">Bay {i}<input id="bay_{i}" name="bay_{i}" '
-        f'type="number" min="0" step="1" required value="{counts.get(f"bay_{i}", 0)}"></label>'
-        for i in range(5)
+        f'<label for="{bay_id}">{bay_title(bay_id)}<input id="{bay_id}" name="{bay_id}" '
+        f'type="number" min="0" step="1" required value="{counts.get(bay_id, 0)}"></label>'
+        for bay_id in BAYS
     )
     query = escape(urlencode({"image_path": name}), quote=True)
     return page(
@@ -154,14 +172,15 @@ const nextImage = document.querySelector('a[aria-label="Next image"]');
 const bayInputs = Array.from(form.querySelectorAll('input'));
 // Existing metadata always wins, including empty objects and incomplete labels.
 const hasSavedMetadata = {json.dumps(saved is not None)};
-// Use a new key after the bay-index change and database reset.
-const previousCountsKey = 'wash-cam.previous-verified-counts-zero-indexed';
+// Counts are keyed by bay ID. A new key ignores older positional memories.
+const previousCountsKey = 'wash-cam.previous-verified-counts-by-bay';
 if (!hasSavedMetadata) {{
   try {{
     const previous = JSON.parse(sessionStorage.getItem(previousCountsKey));
-    if (Array.isArray(previous) && previous.length === 5 &&
-        previous.every(count => Number.isSafeInteger(count) && count >= 0)) {{
-      bayInputs.forEach((input, index) => {{ input.value = previous[index]; }});
+    if (previous && typeof previous === 'object' && !Array.isArray(previous) &&
+        Object.keys(previous).length === bayInputs.length &&
+        bayInputs.every(input => Number.isSafeInteger(previous[input.id]) && previous[input.id] >= 0)) {{
+      bayInputs.forEach(input => {{ input.value = previous[input.id]; }});
       document.getElementById('status').textContent = 'Previous counts loaded. Verify this image before saving.';
     }}
   }} catch {{
@@ -184,7 +203,7 @@ async function saveLabels(destination) {{
   saving = true;
   const status = document.getElementById('status');
   const button = document.getElementById('save');
-  const counts = Array.from(form.querySelectorAll('input'), input => Number(input.value));
+  const counts = Object.fromEntries(bayInputs.map(input => [input.id, Number(input.value)]));
   button.disabled = true;
   status.textContent = 'Saving…';
   try {{
@@ -209,7 +228,7 @@ form.addEventListener('submit', async (event) => {{
   event.preventDefault();
   await saveLabels(nextImage.href);
 }});
-// Intercept both image links so each transition saves all five counts.
+// Intercept both image links so each transition saves every bay count.
 document.querySelectorAll('a.image-step').forEach(link => {{
   link.addEventListener('click', async (event) => {{
     event.preventDefault();
@@ -242,17 +261,13 @@ def route(environ):
             if not isinstance(payload, dict):
                 raise TypeError
             name, counts = payload.get("image_path"), payload.get("counts")
-            if (
-                not isinstance(counts, list)
-                or len(counts) != 5
-                or any(type(count) is not int or count < 0 for count in counts)
-            ):
+            if not valid_counts(counts):
                 raise ValueError
         except (ValueError, TypeError, UnicodeError):
             return (
                 "400 Bad Request",
                 "application/json",
-                b'{"error":"Provide five nonnegative whole-number counts."}',
+                b'{"error":"Provide a nonnegative whole-number count for every bay."}',
             )
         if name not in names:
             return "404 Not Found", "application/json", b'{"error":"Image not found."}'

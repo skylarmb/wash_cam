@@ -1,6 +1,6 @@
 # Vehicle detection
 
-`wash_cam.detect.VehicleDetector` counts vehicles per bay with torchvision's pretrained COCO Faster R-CNN (ResNet-50 FPN v2), running on the Apple Silicon GPU (MPS) when available. The first use downloads about 170 MB of weights into the torch cache; torch is imported only when a detector is built, so other CLI commands stay fast. `detect(image)` returns every `Detection(box, label, score)`, and `predict(image)` returns one count per bay, so the detector plugs into `wash-cam evaluate --model detector`. One model serves day and night.
+`wash_cam.detect.VehicleDetector` counts vehicles per bay with torchvision's pretrained COCO Faster R-CNN (ResNet-50 FPN v2), running on the Apple Silicon GPU (MPS) when available. The first use downloads about 170 MB of weights into the torch cache; torch is imported only when a detector is built, so other CLI commands stay fast. `detect(image)` returns every `Detection(box, label, score)`, and `predict(image)` returns a `{bay_id: count}` mapping covering the wash bays and the vacuum station, so the detector plugs into `wash-cam evaluate --model detector`. One model serves day and night.
 
 `count_vehicles(detections)` keeps `car`, `truck`, `bus`, and `motorcycle` detections scoring at least `MIN_VEHICLE_SCORE` (0.5), merges boxes overlapping more than `DUPLICATE_OVERLAP` IoU across classes (the model sometimes reports one car as both car and truck), then places each by its bottom-center with `assign_to_bay`. Vehicles outside every bay, such as cars queueing in the foreground, are not counted.
 

@@ -26,7 +26,9 @@ SQLite does not check whether the image file exists.
 Use `vehicles.bays` for an array of bay entries.
 Give each entry a stable, unique `bay_id` within the image.
 Other fields remain flexible.
-The labeling interface saves `vehicle_count` for bays `bay_0` through `bay_4`.
+Wash bays are `bay_0` through `bay_4`, numbered from the leftmost bay.
+The vacuum station is `vac_0`.
+The labeling interface saves `vehicle_count` for all six.
 A count of zero means the bay is empty.
 An omitted bay has not been labeled.
 
@@ -44,7 +46,8 @@ An omitted bay has not been labeled.
       },
       {"bay_id": "bay_2", "vehicle_count": 1},
       {"bay_id": "bay_3", "vehicle_count": 0},
-      {"bay_id": "bay_4", "vehicle_count": 0}
+      {"bay_id": "bay_4", "vehicle_count": 0},
+      {"bay_id": "vac_0", "vehicle_count": 1}
     ]
   }
 }
@@ -85,10 +88,10 @@ The dashboard lists JPEG files directly inside `images/`.
 Send `POST /api/labels` with `Content-Type: application/json`:
 
 ```json
-{"image_path": "capture.jpg", "counts": [2, 0, 1, 0, 0]}
+{"image_path": "capture.jpg", "counts": {"bay_0": 2, "bay_1": 0, "bay_2": 1, "bay_3": 0, "bay_4": 0, "vac_0": 1}}
 ```
 
-The five counts correspond to bays 0 through 4.
+`counts` maps every bay ID to its count, with no missing or extra IDs.
 Each count must be a nonnegative integer.
 A successful request returns `{"saved": true}`.
 The API replaces the image's metadata with these counts and sets the current UTC verification time.
@@ -99,7 +102,7 @@ Missing or invalid counts in stored metadata default to zero.
 The schema prohibits a null metadata column. An absent row is the API’s `null` state.
 A new browser tab, invalid session data, or unavailable session storage uses zero defaults.
 Inherited counts are suggestions until the user saves the image.
-Previous image and Next image save all five counts before navigation.
+Previous image and Next image save every count before navigation.
 Enter and the save button save the current image and open the next image. The last image wraps to the first.
 Bay 0 receives focus on load. Space increments the focused count and advances focus. Tab preserves the count.
 A failed save keeps the current image open.

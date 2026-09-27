@@ -1,4 +1,4 @@
-"""Count vehicles in each wash bay with a pretrained object detector."""
+"""Count vehicles in each wash and vacuum bay with a pretrained object detector."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 
 from wash_cam.bays import Box, assign_to_bay, draw_bays
-from wash_cam.config import BAY_POLYGONS, CHECKOUT_ROOT
+from wash_cam.config import BAYS, CHECKOUT_ROOT
 
 __all__ = ["Detection", "VehicleDetector", "count_vehicles", "run"]
 
@@ -63,9 +63,9 @@ def vehicles(detections: Sequence[Detection]) -> list[Detection]:
     return [candidates[index] for index in np.array(kept).flatten()]
 
 
-def count_vehicles(detections: Sequence[Detection]) -> list[int]:
-    """Return the number of vehicles standing in each bay, indexed left to right."""
-    counts = [0] * len(BAY_POLYGONS)
+def count_vehicles(detections: Sequence[Detection]) -> dict[str, int]:
+    """Return the number of vehicles standing in each bay, keyed by bay ID."""
+    counts = dict.fromkeys(BAYS, 0)
     for detection in vehicles(detections):
         bay = assign_to_bay(detection.box)
         if bay is not None:
@@ -113,7 +113,7 @@ class VehicleDetector:
             )
         ]
 
-    def predict(self, image: np.ndarray) -> list[int]:
+    def predict(self, image: np.ndarray) -> dict[str, int]:
         """Return the vehicle count for each bay of a BGR capture."""
         return count_vehicles(self.detect(image))
 
@@ -148,6 +148,7 @@ def run(images: Sequence[Path] | None = None, output: Path = REVIEW_DIR) -> None
         if image is None:
             raise SystemExit(f"Cannot read image {path}")
         detections = detector.detect(image)
-        print(f"{path.name} {count_vehicles(detections)}")
+        counts = count_vehicles(detections)
+        print(path.name, " ".join(f"{bay}={count}" for bay, count in counts.items()))
         cv2.imwrite(str(output / path.name), draw_detections(image, detections))
     print(f"Wrote {len(paths)} overlays to {output}")

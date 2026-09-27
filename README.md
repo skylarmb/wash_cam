@@ -79,12 +79,12 @@ Missing-file errors include the copy instruction. The loader does not supply def
 The SQLite database at `db/labels.sqlite3` stores flexible JSON metadata for each verified image.
 Each image can include labels for multiple bays.
 See [the database documentation](db/README.md) for the schema, metadata convention, and migration command.
-Open the dashboard’s **Data labeling** tab to select an image and enter vehicle counts for all five bays.
+Open the dashboard’s **Data labeling** tab to select an image and enter vehicle counts for the five wash bays (Bay 0 is leftmost) and the vacuum station.
 Use **Previous image** and **Next image** to move through captures, or select an image from the dropdown.
 Saved counts load into the inputs when you select an image. Images without a database record inherit the last counts saved in this browser tab.
 A new tab starts at zero. Existing metadata always takes priority, including empty objects.
 Previous image and Next image save the current counts before navigation. A failed save keeps the current image open.
-Press **Enter** to save all five counts and open the next image. The last image wraps to the first.
+Press **Enter** to save every count and open the next image. The last image wraps to the first.
 Bay 0 receives focus on each load. **Tab** moves to the next bay without changing its count.
 **Space** adds one to the focused bay and moves to the next input. After Bay 4, it focuses the save button.
 The save button also saves and opens the next image. Each save updates the verification time.

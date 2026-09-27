@@ -12,7 +12,7 @@ import cv2
 import numpy as np
 
 from wash_cam.config import (
-    BAY_POLYGONS,
+    BAYS,
     CHECKOUT_ROOT,
     DARK_PIXEL_LEVEL,
     NIGHT_DARK_FRACTION,
@@ -32,26 +32,25 @@ __all__ = [
 
 IMAGES_DIR = CHECKOUT_ROOT / "images"
 DATABASE_PATH = CHECKOUT_ROOT / "db" / "labels.sqlite3"
-BAY_COUNT = len(BAY_POLYGONS)
-
-# Per-bay counts for one image. None marks a bay the labeler did not fill in.
-Counts = list[int | None]
+# Vehicle counts for one image, keyed by bay ID. A labeled image may omit bays
+# the labeler did not fill in; a prediction covers every bay.
+Counts = dict[str, int]
 
 
 class Predictor(Protocol):
     """Anything that counts vehicles in each bay of a cropped capture."""
 
-    def predict(self, image: np.ndarray) -> list[int]:
-        """Return one vehicle count per bay, indexed left to right."""
+    def predict(self, image: np.ndarray) -> Counts:
+        """Return the vehicle count for every bay, keyed by bay ID."""
         ...
 
 
 class EmptyPredictor:
     """Report every bay as empty; the floor any real model has to beat."""
 
-    def predict(self, image: np.ndarray) -> list[int]:
+    def predict(self, image: np.ndarray) -> Counts:
         """Return zero for every bay."""
-        return [0] * BAY_COUNT
+        return dict.fromkeys(BAYS, 0)
 
 
 # Models selectable from the CLI by name.
@@ -85,41 +84,29 @@ def is_night(image: np.ndarray) -> bool:
 def load_labels(database: Path) -> dict[str, Counts]:
     """Return per-bay counts for every verified image, keyed by image path.
 
-    Bays are placed by their `bay_<index>` ID. Entries with an unknown ID or a
-    missing count are left as None rather than guessed.
+    Entries with an unknown bay ID or a missing count are left out rather
+    than guessed, so they are not scored.
     """
     with closing(sqlite3.connect(f"{database.as_uri()}?mode=ro", uri=True)) as db:
         rows = db.execute("SELECT image_path, metadata FROM image_labels").fetchall()
 
     labels: dict[str, Counts] = {}
     for image_path, metadata in rows:
-        counts: Counts = [None] * BAY_COUNT
+        counts: Counts = {}
         for entry in json.loads(metadata).get("vehicles", {}).get("bays", []):
-            index = bay_index(entry.get("bay_id"))
+            bay_id = entry.get("bay_id")
             count = entry.get("vehicle_count")
-            if index is not None and isinstance(count, int):
-                counts[index] = count
+            if bay_id in BAYS and isinstance(count, int):
+                counts[bay_id] = count
         labels[image_path] = counts
     return labels
 
 
-def bay_index(bay_id: object) -> int | None:
-    """Return the index encoded in a `bay_<index>` ID, or None if it names no known bay."""
-    if not isinstance(bay_id, str) or not bay_id.startswith("bay_"):
-        return None
-    suffix = bay_id.removeprefix("bay_")
-    if not suffix.isdigit() or int(suffix) >= BAY_COUNT:
-        return None
-    return int(suffix)
-
-
-def score(labels: list[Counts], predictions: list[list[int]]) -> Score:
+def score(labels: list[Counts], predictions: list[Counts]) -> Score:
     """Compare predictions with labels image by image, skipping unlabeled bays."""
     bays = correct_bays = correct_images = total_error = 0
     for labeled, predicted in zip(labels, predictions, strict=True):
-        pairs = [
-            (want, got) for want, got in zip(labeled, predicted) if want is not None
-        ]
+        pairs = [(want, predicted[bay_id]) for bay_id, want in labeled.items()]
         errors = [abs(want - got) for want, got in pairs]
         bays += len(pairs)
         correct_bays += errors.count(0)
@@ -138,7 +125,7 @@ def score(labels: list[Counts], predictions: list[list[int]]) -> Score:
 
 def evaluate(predictor: Predictor, database: Path, images: Path) -> dict[str, Score]:
     """Score a predictor on every labeled image, overall and split by day and night."""
-    groups: dict[str, tuple[list[Counts], list[list[int]]]] = {
+    groups: dict[str, tuple[list[Counts], list[Counts]]] = {
         "all": ([], []),
         "day": ([], []),
         "night": ([], []),
