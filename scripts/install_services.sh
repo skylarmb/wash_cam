@@ -48,6 +48,12 @@ for service in capture dashboard watch; do
 PLIST
   # Replace any running copy so the new definition takes effect.
   launchctl bootout "$DOMAIN/$label" 2>/dev/null || true
+  # bootout returns before the old agent is gone, and bootstrapping over it
+  # fails with "Input/output error", so wait up to 10s for it to unload.
+  for _ in $(seq 20); do
+    launchctl print "$DOMAIN/$label" >/dev/null 2>&1 || break
+    sleep 0.5
+  done
   launchctl bootstrap "$DOMAIN" "$plist"
   echo "Installed $label (log: $LOGS/$service.log)"
 done
