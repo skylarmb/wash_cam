@@ -1,8 +1,11 @@
 """Check that new captures are detected once and recorded in the database."""
 
 import json
+import os
 import sqlite3
+import time
 from contextlib import closing
+from datetime import datetime, timezone
 
 import cv2
 import numpy as np
@@ -38,6 +41,16 @@ def setup(tmp_path):
     return images, database
 
 
+@pytest.fixture
+def pacific(monkeypatch):
+    """Run in the car wash's timezone, then restore the process timezone."""
+    monkeypatch.setenv("TZ", "America/Los_Angeles")
+    time.tzset()
+    yield
+    monkeypatch.undo()
+    time.tzset()
+
+
 def write_capture(images, name):
     """Save a blank capture."""
     cv2.imwrite(str(images / name), np.zeros((340, 1270, 3), dtype=np.uint8))
@@ -50,6 +63,70 @@ def detection_rows(database):
             "SELECT image_path, metadata, model FROM image_detections"
         ).fetchall()
     return {path: (json.loads(metadata), model) for path, metadata, model in rows}
+
+
+def captured_at(database, image_path):
+    """Return the stored UTC capture time of one image."""
+    with closing(sqlite3.connect(database)) as connection:
+        return connection.execute(
+            "SELECT captured_at FROM image_detections WHERE image_path = ?",
+            (image_path,),
+        ).fetchone()[0]
+
+
+def set_mtime(path, utc_text):
+    """Set a file's modification time to a UTC timestamp."""
+    stamp = datetime.fromisoformat(f"{utc_text}+00:00").timestamp()
+    os.utime(path, (stamp, stamp))
+
+
+def test_capture_time_converts_local_filenames_to_utc(pacific, tmp_path):
+    """Capture filenames are local time; stored times are UTC."""
+    path = tmp_path / "20260926_164649_764289.jpg"
+    path.write_bytes(b"")
+
+    assert watch.capture_time(path) == datetime(
+        2026, 9, 26, 23, 46, 49, 764289, tzinfo=timezone.utc
+    )
+
+
+def test_capture_time_uses_the_file_to_resolve_the_repeated_hour(pacific, tmp_path):
+    """When daylight saving ends, 01:30 happens twice; the file time decides which."""
+    path = tmp_path / "20261101_013000_000000.jpg"
+    path.write_bytes(b"")
+
+    set_mtime(path, "2026-11-01 08:30:01")
+    assert watch.capture_time(path) == datetime(2026, 11, 1, 8, 30, tzinfo=timezone.utc)
+    set_mtime(path, "2026-11-01 09:30:01")
+    assert watch.capture_time(path) == datetime(2026, 11, 1, 9, 30, tzinfo=timezone.utc)
+
+
+def test_detections_record_the_capture_time(pacific, setup):
+    """Stored detections carry the capture's UTC time."""
+    images, database = setup
+    write_capture(images, "20260926_164649_764289.jpg")
+
+    watch.process_new_images(FakeDetector(), images, database)
+
+    assert (
+        captured_at(database, "20260926_164649_764289.jpg") == "2026-09-26 23:46:49.764"
+    )
+
+
+def test_backfill_fills_missing_capture_times(pacific, setup):
+    """Detections stored before capture times existed get them filled in."""
+    images, database = setup
+    write_capture(images, "20260926_164649_764289.jpg")
+    watch.process_new_images(FakeDetector(), images, database)
+    with closing(sqlite3.connect(database)) as connection, connection:
+        connection.execute("UPDATE image_detections SET captured_at = NULL")
+
+    filled = watch.backfill_capture_times(images, database)
+
+    assert filled == 1
+    assert (
+        captured_at(database, "20260926_164649_764289.jpg") == "2026-09-26 23:46:49.764"
+    )
 
 
 def test_new_captures_are_detected_and_stored(setup):

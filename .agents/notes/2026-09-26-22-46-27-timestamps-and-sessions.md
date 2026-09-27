@@ -1,0 +1,5 @@
+# Timestamps and sessions (plan steps 2 and 1)
+
+Added migration `003` (`image_detections.captured_at`, UTC, indexed) and `004` (`sessions`). The watcher stores capture times from filenames (`watch.capture_time`, mtime resolves the DST repeat hour), backfills missing ones at start, and updates sessions after each pass. Added `wash_cam.sessions` (debounced open/close, gap and open handling, midpoint arrival/departure, incremental update equal to a full rebuild) and `wash-cam sessions [--rebuild]`. `CAPTURE_INTERVAL = 15` in config is now the single source for the capture loop interval via `install_services.sh`. Switched to timezone-aware UTC datetimes (ruff DTZ rules are enabled by an out-of-repo config).
+
+Red: with stubs, `uv run --locked pytest -q tests/test_db.py tests/test_watch.py tests/test_sessions.py` gave 13 behavioral failures (missing columns/tables, None times, empty sessions). Green: 144 passed; `uvx ruff check .`, `uvx ruff format --check .`, `uv build --quiet`, `git diff --check` passed.

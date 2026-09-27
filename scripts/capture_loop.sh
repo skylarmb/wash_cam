@@ -19,7 +19,8 @@ fi
 
 cd "$(dirname "$0")/.."
 
-INTERVAL="${INTERVAL:-30}"
+# The launchd service passes CAPTURE_INTERVAL from wash_cam/config.py.
+INTERVAL="${INTERVAL:-15}"
 DURATION="${DURATION:-28800}" # 8 hours
 LOG="${LOG:-tmp/capture.log}"
 

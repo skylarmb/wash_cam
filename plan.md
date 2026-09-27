@@ -23,7 +23,7 @@ This is a hobby project. Loose accuracy is acceptable.
 - **Services:** launchd agents `com.washcam.capture`, `com.washcam.dashboard`, and
   `com.washcam.watch` run on the mini. `scripts/install_services.sh` installs them.
   Logs are in `tmp/logs/`, and the capture log is `tmp/capture.log`.
-- **Capture:** one cropped frame every 30 s (`scripts/capture_loop.sh`), aligned
+- **Capture:** one cropped frame every 15 s (`scripts/capture_loop.sh`), aligned
   with the calibration in `config.yaml`.
 - **Detection:** `wash-cam watch` runs the pretrained COCO Faster R-CNN detector
   (`wash_cam.detect`) on every new capture. It stores per-bay counts and counted
@@ -55,22 +55,27 @@ Follow the red/green workflow in `AGENTS.md` for every step.
 
 ### Step 2: Timestamps and capture interval
 
-- [ ] Add migration `003`, which adds a UTC `captured_at` column to
+- [x] Add migration `003`, which adds a UTC `captured_at` column to
   `image_detections` and indexes it.
   - The watcher derives the value from the capture filename (local time,
     `%Y%m%d_%H%M%S_%f`) in the server's timezone.
   - When daylight saving time ends, one hour repeats. For that hour, the
     file's modification time decides which occurrence a capture belongs to.
-  - Backfill existing rows, either with a one-off pass or by deleting the rows
-    so the watcher refills them.
-- [ ] Change the capture interval to 15 s by setting `INTERVAL` in the capture
-  service's launchd definition in `scripts/install_services.sh`.
-- [ ] Record the interval with each capture or session. The session logic needs
-  to know the expected spacing between frames.
+  - Backfill existing rows. The watcher fills missing capture times when it
+    starts (`backfill_capture_times`).
+- [x] Change the capture interval to 15 s. `CAPTURE_INTERVAL` in
+  `wash_cam/config.py` is the single source, and `scripts/install_services.sh`
+  passes it to the capture loop.
+- [x] ~~Record the interval with each capture or session.~~ Not needed:
+  - Session debouncing counts frames rather than seconds.
+  - Arrival and departure are estimated from the actual spacing of
+    neighboring frames.
+  - Older 30 s data therefore stays valid. Only gap detection uses
+    `CAPTURE_INTERVAL`.
 
 ### Step 1: Sessions (empty → full → empty)
 
-- [ ] Add a migration for a `sessions` table with these columns:
+- [x] Add migration `004` for a `sessions` table with these columns:
   - `id`
   - `bay_id`
   - `started_at`: UTC time of the first occupied frame
@@ -78,9 +83,13 @@ Follow the red/green workflow in `AGENTS.md` for every step.
   - `duration_s`
   - `frames`
   - `max_count`
-  - `end_reason`: `left` or `gap`
-  - `detector`: the model name
-- [ ] Add a `wash_cam.sessions` module that turns each bay's ordered frames
+  - `end_reason`: `left`, `gap`, or `open`
+  - `first_frame_at` and `last_frame_at`: the raw times of the first and last
+    occupied frames. `started_at` and `ended_at` are estimated halfway to the
+    neighboring empty frames.
+  - The planned `detector` column was dropped, because sessions are rebuilt
+    whenever detections change.
+- [x] Add a `wash_cam.sessions` module that turns each bay's ordered frames
   into sessions:
   - A bay is occupied when its vehicle count is at least 1.
   - **Open:** a session opens after `OPEN_FRAMES` (2) consecutive occupied
@@ -90,14 +99,15 @@ Follow the red/green workflow in `AGENTS.md` for every step.
   - **Gap:** if frames are missing for more than `MAX_GAP_INTERVALS` (3)
     intervals, the session closes with `end_reason = gap`. It is never
     stretched across an outage.
-- [ ] Keep sessions current:
+- [x] Keep sessions current:
   - The watcher recomputes recent sessions after each pass.
   - `wash-cam sessions --rebuild` recomputes everything.
-- [ ] Write tests on synthetic frame sequences covering:
+- [x] Write tests on synthetic frame sequences covering:
   - a clean wash
   - a one-frame dropout in the middle of a wash
   - a one-frame phantom
-  - back-to-back cars with a single empty frame between them
+  - back-to-back cars with a single empty frame between them. These merge
+    into one session by design; two empty frames split them.
   - a capture gap
   - a session still open at the latest frame
 

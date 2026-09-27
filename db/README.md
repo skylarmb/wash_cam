@@ -65,7 +65,7 @@ uv run wash-cam migrate
 
 Each migration `NNN_description.sql` sets `PRAGMA user_version` to `NNN` in its own transaction.
 `migrate` applies every migration newer than the recorded version, in order, and is a no-op once current.
-`001` creates `image_labels`. `002` creates `image_detections`.
+`001` creates `image_labels`. `002` creates `image_detections`. `003` adds `image_detections.captured_at`. `004` creates `sessions`.
 
 Check the database version and integrity:
 
@@ -83,7 +83,13 @@ The dashboard lists JPEG files directly inside `tmp/images/`.
 ## Detections
 
 `wash-cam watch` stores one `image_detections` row per capture, keyed by `image_path`.
-`model` names the detector, and `detected_at` is the UTC detection time.
+`model` names the detector, `detected_at` is the UTC detection time, and `captured_at` is the UTC capture time.
+
+## Sessions
+
+`sessions` holds one row per vehicle visit to a bay, derived from `image_detections` by `wash_cam.sessions`.
+It is rebuildable with `wash-cam sessions --rebuild`, so never edit rows by hand.
+See `.agents/docs/sessions.md` for the columns and debouncing rules.
 `metadata.vehicles.bays` uses the same convention as labels, with a count for every bay.
 `metadata.vehicles.detections` lists each counted vehicle with its `bay_id` (null outside every bay), `label`, `score`, and `box` as `[left, top, right, bottom]`.
 Delete rows to have the watcher detect those captures again.

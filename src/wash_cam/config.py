@@ -16,6 +16,11 @@ EXAMPLE_CONFIG_PATH = CHECKOUT_ROOT / "config.example.yaml"
 IMAGES_DIR = CHECKOUT_ROOT / "tmp" / "images"
 DATABASE_PATH = CHECKOUT_ROOT / "db" / "labels.sqlite3"
 
+# Seconds between captures. scripts/install_services.sh passes this to the
+# capture loop, and sessions use it to tell a quiet bay from a capture outage.
+# Each session's start and end are uncertain by up to one interval.
+CAPTURE_INTERVAL = 15.0
+
 # Reference frames that calibration aligns later captures against, one per
 # lighting condition (day, night, ...). All are stored in canonical
 # coordinates, so CAMERA_CROP_BOX means the same thing against any of them.
