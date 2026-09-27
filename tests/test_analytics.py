@@ -136,3 +136,52 @@ def test_render_explains_an_empty_range(database):
     html = analytics.render(database, days=7, now=EVENING)
 
     assert "No captures in this range" in html
+
+
+@pytest.mark.parametrize(
+    ("bay_id", "length_min", "dollars"),
+    [
+        ("bay_1", 2, 3.00),  # Below the minimum.
+        ("bay_1", 3, 3.00),  # Exactly the minimum.
+        ("bay_1", 4.5, 4.50),  # Per-minute rate above the minimum, not rounded.
+        ("vac_0", 2, 0.50),  # Vacuum: per-minute rate, no minimum.
+    ],
+)
+def test_session_revenue_applies_rate_and_minimum(bay_id, length_min, dollars):
+    """Wash bays charge max($3, $1/min); the vacuum charges $0.25/min."""
+    revenue = analytics.session_revenue(visit(bay_id, 0, length_min))
+
+    assert revenue == pytest.approx(dollars)
+
+
+def test_revenue_by_day_and_hour_counts_only_complete_visits(pacific):
+    """Totals group complete visits by local start day and hour."""
+    found = [
+        visit("bay_0", 0, 5),  # Sat 20:00, $5.
+        visit("bay_1", 30, 32),  # Sat 20:30, $3 minimum.
+        visit("vac_0", 70, 74),  # Sat 21:10, $1.
+        visit("bay_2", 10, 50, end_reason="gap"),  # Cut off: left out.
+    ]
+
+    by_day, by_hour = analytics.revenue_totals(found)
+
+    assert by_day == {"Sat 2026-09-26": pytest.approx(9.0)}
+    assert by_hour == {20: pytest.approx(8.0), 21: pytest.approx(1.0)}
+
+
+def test_render_revenue_labels_estimates_and_placeholder_price(pacific):
+    """Every revenue figure is an estimate, and the vacuum price is a placeholder."""
+    html = analytics.render_revenue([visit("bay_0", 0, 5)])
+
+    assert "Estimated revenue" in html
+    assert "$5.00" in html
+    assert "placeholder" in html
+
+
+def test_p90_stays_within_the_observed_durations():
+    """With few visits, the 90th percentile never exceeds the longest visit."""
+    histogram = analytics.duration_histogram(
+        [visit("vac_0", 0, 3), visit("vac_0", 0, 17)]
+    )
+
+    assert histogram.p90_s <= 17 * 60
