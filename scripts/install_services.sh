@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install launchd agents that keep the capture loop, dashboard, detection
 # watcher, and capture heartbeat running on the server: started at login,
-# restarted if they exit.
+# restarted if they exit. Also install the nightly database backup.
 #
 # The first capture under launchd may trigger a macOS camera permission prompt
 # on the server's screen; approve it there once.
@@ -29,12 +29,19 @@ mkdir -p "$AGENTS" "$LOGS"
 # sessions also use, so the two cannot drift apart.
 INTERVAL="$("$CHECKOUT/.venv/bin/python" -c 'from wash_cam.config import CAPTURE_INTERVAL; print(int(CAPTURE_INTERVAL))')"
 
-for service in capture dashboard watch heartbeat; do
+for service in capture dashboard watch heartbeat backup; do
   environment=""
+  # Long-running services start at login and restart when they exit.
+  schedule="<key>RunAtLoad</key><true/><key>KeepAlive</key><true/>"
   case "$service" in
     capture)
       arguments="<string>$CHECKOUT/scripts/capture_loop.sh</string>"
       environment="<key>EnvironmentVariables</key><dict><key>INTERVAL</key><string>$INTERVAL</string></dict>"
+      ;;
+    backup)
+      # Runs once a night at 03:30, and exits after the backup.
+      arguments="<string>$CHECKOUT/scripts/backup_db.sh</string>"
+      schedule="<key>StartCalendarInterval</key><dict><key>Hour</key><integer>3</integer><key>Minute</key><integer>30</integer></dict>"
       ;;
     *) arguments="<string>/usr/bin/caffeinate</string><string>-ims</string><string>$CHECKOUT/.venv/bin/wash-cam</string><string>$service</string>" ;;
   esac
@@ -50,8 +57,7 @@ for service in capture dashboard watch heartbeat; do
   <array>$arguments</array>
   $environment
   <key>WorkingDirectory</key><string>$CHECKOUT</string>
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
+  $schedule
   <!-- Wait before restarting a crashing service instead of spinning. -->
   <key>ThrottleInterval</key><integer>30</integer>
   <key>StandardOutPath</key><string>$LOGS/$service.log</string>
