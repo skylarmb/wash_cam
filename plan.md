@@ -63,8 +63,9 @@ agents which migration number you take before you write it.
 | Step 5: session scoring command and threshold tuning (ground truth comes from existing dashboard labels) | `src/wash_cam/sessions.py`, `src/wash_cam/session_eval.py`, `src/wash_cam/cli.py`, `tests/test_session_eval.py` | SapphireCompass (scorer done; tuning waits for labeled sequences) |
 | Step 7: nightly backups | `scripts/backup_db.sh`, one entry in `scripts/install_services.sh` | HazyValley |
 | Step 7: capture heartbeat (alerts go to `NOTIFICATIONS.md`) | `src/wash_cam/heartbeat.py` and its tests | ChartreuseCrane |
-| Step 5: record which label counts a human reviewed | `src/wash_cam/dashboard/` and its tests | StormyCliff |
-| Step 6: Analytics tab without revenue (heatmap, utilization, durations) | `src/wash_cam/dashboard/analytics.py` and its tests, route registration in `dashboard/__init__.py` | SapphireCompass (in progress) |
+| Step 5: `label-export` and label importer | new module and CLI command, with tests | SapphireCompass (next) |
+| Step 5: agent labeling (rubric, then day and night batches) | label files only, no code | StormyCliff |
+| Step 6: Analytics tab without revenue (heatmap, utilization, durations) | `src/wash_cam/dashboard/analytics.py` and its tests, route registration in `dashboard/__init__.py` | SapphireCompass (after `label-export`) |
 | Step 4 and revenue in step 6 (blocked on pricing) | a new revenue module | Later, probably SapphireCompass |
 | Coordination: `plan.md` status and `AGENTS.md` | `plan.md`, `AGENTS.md` | ScarletEagle |
 
@@ -128,9 +129,17 @@ agents which migration number you take before you write it.
 
 ### Step 5: Validation
 
-- [ ] Hand-label a few hours of consecutive frames, day and night, with true
-  session start and end times per bay. Store them as labeled sessions or
-  derive them from per-frame labels.
+- [ ] Label a few hours of consecutive frames, day and night, for all six
+  bays. Rowan decided that an agent labels them, not a human:
+  - SapphireCompass builds `label-export`, which writes images with bay
+    overlays and a manifest but no detections, and an importer.
+  - StormyCliff labels with its own vision model and never reads
+    `image_detections`. A rubric is agreed before the first batch.
+  - Each agent label records `"labeled_by": "agent:<name>/<model>"` in
+    `image_labels.metadata`. A later human check records `"reviewed_by"`. The
+    importer never overwrites a label without `labeled_by`.
+  - The scorer reports agreement with agent labels separately from accuracy
+    against human labels.
 - [x] Add a scoring command, `wash-cam score-sessions [--open N] [--close N]`, that matches
   predicted sessions to labeled ones. It reports:
   - missed sessions
@@ -140,11 +149,6 @@ agents which migration number you take before you write it.
   these scores.
 - [ ] Get daily revenue totals from the owner if possible. A week of totals
   would be the best check on overall accuracy.
-- [ ] StormyCliff: record which counts a human reviewed. The labeling tab
-  carries counts forward and saves them on navigation, so a saved count is not
-  always ground truth. Store the reviewed bays in `image_labels.metadata` (for
-  example, an `edited_bays` list). No migration is needed. The session scorer
-  uses this flag when it exists.
 
 ### Step 4: Revenue model
 
