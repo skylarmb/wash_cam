@@ -3,7 +3,17 @@
 import argparse
 from pathlib import Path
 
-from wash_cam import bays, camera, dashboard, db, detect, dummy, evaluate, watch
+from wash_cam import (
+    bays,
+    camera,
+    dashboard,
+    db,
+    detect,
+    dummy,
+    evaluate,
+    sessions,
+    watch,
+)
 from wash_cam.camera import calibrate
 from wash_cam.config import DATABASE_PATH
 
@@ -78,6 +88,15 @@ def main() -> None:
         "watch", help="Detect vehicles in every new capture and store the results."
     )
     command.set_defaults(run=watch.run)
+    command = commands.add_parser(
+        "sessions", help="Update bay visit sessions from stored detections."
+    )
+    command.add_argument(
+        "--rebuild",
+        action="store_true",
+        help="Recompute every session, e.g. after changing thresholds or detections.",
+    )
+    command.set_defaults(run=sessions.run)
     args = parser.parse_args()
     arguments = vars(args)
     arguments.pop("command", None)

@@ -24,9 +24,17 @@ mkdir -p "$AGENTS" "$LOGS"
 # holds off sleep with caffeinate only while it runs, so the long-running
 # services also run under caffeinate: some service always keeps the server
 # awake, even in the moment between capture runs.
+# The capture interval comes from CAPTURE_INTERVAL in wash_cam/config.py, which
+# sessions also use, so the two cannot drift apart.
+INTERVAL="$("$CHECKOUT/.venv/bin/python" -c 'from wash_cam.config import CAPTURE_INTERVAL; print(int(CAPTURE_INTERVAL))')"
+
 for service in capture dashboard watch; do
+  environment=""
   case "$service" in
-    capture) arguments="<string>$CHECKOUT/scripts/capture_loop.sh</string>" ;;
+    capture)
+      arguments="<string>$CHECKOUT/scripts/capture_loop.sh</string>"
+      environment="<key>EnvironmentVariables</key><dict><key>INTERVAL</key><string>$INTERVAL</string></dict>"
+      ;;
     *) arguments="<string>/usr/bin/caffeinate</string><string>-ims</string><string>$CHECKOUT/.venv/bin/wash-cam</string><string>$service</string>" ;;
   esac
   label="com.washcam.$service"
@@ -39,6 +47,7 @@ for service in capture dashboard watch; do
   <key>Label</key><string>$label</string>
   <key>ProgramArguments</key>
   <array>$arguments</array>
+  $environment
   <key>WorkingDirectory</key><string>$CHECKOUT</string>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
