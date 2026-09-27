@@ -9,6 +9,7 @@ from urllib.parse import parse_qs, urlencode
 from werkzeug import serving
 
 from wash_cam.config import BAYS, DATABASE_PATH, IMAGES_DIR
+from wash_cam.dashboard import analytics
 
 # Input titles for each bay ID prefix: wash bays and the vacuum station.
 BAY_TITLES = {"bay": "Bay", "vac": "Vacuum"}
@@ -77,12 +78,20 @@ def save_label(name, counts):
         )
 
 
-def page(content, labeling=False):
+def page(content, tab="live"):
     """Render navigation tabs and refresh only the live page."""
-    refresh = "" if labeling else '<meta http-equiv="refresh" content="30">'
-    live_current = "" if labeling else ' aria-current="page"'
-    labels_current = ' aria-current="page"' if labeling else ""
-    return f'''<!doctype html>
+    refresh = '<meta http-equiv="refresh" content="30">' if tab == "live" else ""
+    tabs = [
+        ("/", "live", "Live view"),
+        ("/labeling", "labeling", "Data labeling"),
+        ("/analytics", "analytics", "Analytics"),
+    ]
+    current = ' aria-current="page"'
+    links = "\n".join(
+        f'<a href="{href}"{current if key == tab else ""}>{text}</a>'
+        for href, key, text in tabs
+    )
+    return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 {refresh}<title>Wash Cam</title>
@@ -104,15 +113,14 @@ select {{ max-width: 100%; }}
 .image-step:focus-visible {{ outline: 3px solid #267; outline-offset: 3px; }}
 .image-step[aria-disabled] {{ color: #777; border-color: #ccc; background: #f4f4f4; }}
 </style></head><body><h1>Wash Cam</h1>
-<nav aria-label="Dashboard"><a href="/"{live_current}>Live view</a>
-<a href="/labeling"{labels_current}>Data labeling</a></nav>
-{content}</body></html>'''.encode()
+<nav aria-label="Dashboard">{links}</nav>
+{content}</body></html>""".encode()
 
 
 def labeling_page(names, name):
     """Fill inputs from the selected image's saved bay counts."""
     if not names:
-        return page("<p>No images yet</p>", labeling=True)
+        return page("<p>No images yet</p>", tab="labeling")
     saved = read_label(name)
     # Metadata stays flexible. Missing counts default to zero.
     counts = {}
@@ -239,7 +247,7 @@ document.querySelectorAll('a.image-step').forEach(link => {{
   }});
 }});
 </script>""",
-        labeling=True,
+        tab="labeling",
     )
 
 
@@ -289,6 +297,12 @@ def route(environ):
             else "<p>No images yet</p>"
         )
         return "200 OK", "text/html; charset=utf-8", page(content)
+    if path == "/analytics":
+        # An invalid range falls back to the default week.
+        days = parse_qs(environ.get("QUERY_STRING", "")).get("days", ["7"])[0]
+        days = int(days) if days.isdigit() else 7
+        content = analytics.render(DATABASE_PATH, days)
+        return "200 OK", "text/html; charset=utf-8", page(content, tab="analytics")
     if path == "/labeling":
         if name is not None and name not in names:
             return "404 Not Found", "text/plain", b"Image not found"
