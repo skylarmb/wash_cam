@@ -3,16 +3,92 @@
 import json
 import sqlite3
 from contextlib import closing
+from datetime import datetime
 from html import escape
+from pathlib import Path
 from urllib.parse import parse_qs, urlencode
 
 from werkzeug import serving
 
-from wash_cam.config import BAYS, DATABASE_PATH, IMAGES_DIR
+from wash_cam.config import BAYS, DATABASE_PATH, IMAGES_DIR, bay_title
 from wash_cam.dashboard import analytics
 
-# Input titles for each bay ID prefix: wash bays and the vacuum station.
-BAY_TITLES = {"bay": "Bay", "vac": "Vacuum"}
+# Files under dashboard/static/ the server may send, with their content types.
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+STATIC_FILES = {
+    "analytics.css": "text/css; charset=utf-8",
+    "analytics.js": "text/javascript; charset=utf-8",
+    "echarts.min.js": "text/javascript; charset=utf-8",
+}
+
+# The Analytics tab's markup; static/analytics.js fills it from /api/analytics.
+ANALYTICS_PAGE = """<link rel="stylesheet" href="/static/analytics.css">
+<div class="viz-root" id="analytics">
+<header class="viz-header">
+  <h2>Analytics</h2>
+  <div class="range" role="group" aria-label="Date range">
+    <button type="button" data-preset="today">Today</button>
+    <button type="button" data-preset="7">7 days</button>
+    <button type="button" data-preset="30">30 days</button>
+    <button type="button" data-preset="all">All</button>
+    <label>From <input type="date" id="range-start"></label>
+    <label>To <input type="date" id="range-end"></label>
+  </div>
+  <p class="health" id="health" role="status">Loading…</p>
+</header>
+<section class="panel" aria-labelledby="live-title">
+  <h3 id="live-title">Right now</h3>
+  <div class="live" id="live"></div>
+</section>
+<section class="kpis" id="kpis" aria-label="Summary"></section>
+<section class="panel" aria-labelledby="timeline-title">
+  <h3 id="timeline-title">Bay timeline</h3>
+  <p class="sub">Every visit, one lane per bay. Hatched spans are camera outages.
+  Scroll or drag the slider to zoom; the busy-bays chart below follows.</p>
+  <div class="chart" id="timeline-chart"></div>
+</section>
+<div class="grid">
+  <section class="panel panel--wide" aria-labelledby="busy-title">
+    <h3 id="busy-title">Wash bays busy at once</h3>
+    <p class="sub" id="busy-sub"></p>
+    <div class="chart chart--short" id="busy-chart"></div>
+    <div id="busy-levels"></div>
+  </section>
+  <section class="panel" aria-labelledby="pace-title">
+    <h3 id="pace-title">Revenue pace</h3>
+    <p class="sub" id="pace-sub"></p>
+    <div class="chart" id="pace-chart"></div>
+  </section>
+  <section class="panel" aria-labelledby="swarm-title">
+    <h3 id="swarm-title">Visit lengths</h3>
+    <p class="sub" id="swarm-sub"></p>
+    <div class="chart" id="swarm-chart"></div>
+  </section>
+  <section class="panel" aria-labelledby="hourly-title">
+    <h3 id="hourly-title">Typical day</h3>
+    <p class="sub" id="hourly-sub"></p>
+    <div class="toggle" id="hourly-toggle" role="group" aria-label="Typical day view" hidden>
+      <button type="button" data-view="profile" aria-pressed="true">By hour</button>
+      <button type="button" data-view="weekday" aria-pressed="false">By weekday</button>
+    </div>
+    <div class="chart" id="hourly-chart"></div>
+  </section>
+  <section class="panel" aria-labelledby="balance-title">
+    <h3 id="balance-title">Bay balance</h3>
+    <p class="sub">Each wash bay's share of occupied time and of estimated revenue.
+    Even use puts every bay on the dashed line.</p>
+    <div class="chart" id="balance-chart"></div>
+  </section>
+  <section class="panel panel--wide" aria-labelledby="calendar-title">
+    <h3 id="calendar-title">Daily revenue</h3>
+    <p class="sub">The last 13 weeks. Gray days had no captures.</p>
+    <div class="chart chart--calendar" id="calendar-chart"></div>
+  </section>
+</div>
+<p class="note" id="pricing-note"></p>
+</div>
+<script src="/static/echarts.min.js"></script>
+<script src="/static/analytics.js"></script>"""
 
 
 def image_names():
@@ -32,12 +108,6 @@ def read_label(name):
             (name,),
         ).fetchone()
     return {"metadata": json.loads(row[0]), "verified_at": row[1]} if row else None
-
-
-def bay_title(bay_id):
-    """Turn a bay ID such as `vac_0` into an input title such as `Vacuum 0`."""
-    prefix, _, number = bay_id.partition("_")
-    return f"{BAY_TITLES[prefix]} {number}"
 
 
 def valid_counts(counts):
@@ -307,11 +377,31 @@ def route(environ):
         )
         return "200 OK", "text/html; charset=utf-8", page(content)
     if path == "/analytics":
-        # An invalid range falls back to the default week.
-        days = parse_qs(environ.get("QUERY_STRING", "")).get("days", ["7"])[0]
-        days = int(days) if days.isdigit() else 7
-        content = analytics.render(DATABASE_PATH, days)
-        return "200 OK", "text/html; charset=utf-8", page(content, tab="analytics")
+        return (
+            "200 OK",
+            "text/html; charset=utf-8",
+            page(ANALYTICS_PAGE, tab="analytics"),
+        )
+    if path == "/api/analytics":
+        query = parse_qs(environ.get("QUERY_STRING", ""))
+        try:
+            start, end = analytics.parse_range(
+                query.get("from", [None])[0],
+                query.get("to", [None])[0],
+                datetime.now().astimezone().date(),
+            )
+        except ValueError:
+            return (
+                "400 Bad Request",
+                "application/json",
+                b'{"error":"Use from and to dates as YYYY-MM-DD, from on or before to."}',
+            )
+        payload = analytics.build(DATABASE_PATH, start, end)
+        return "200 OK", "application/json", json.dumps(payload).encode()
+    if path.startswith("/static/"):
+        name = path.removeprefix("/static/")
+        if name in STATIC_FILES:
+            return "200 OK", STATIC_FILES[name], (STATIC_DIR / name).read_bytes()
     if path == "/labeling":
         if name is not None and name not in names:
             return "404 Not Found", "text/plain", b"Image not found"

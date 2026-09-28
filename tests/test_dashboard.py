@@ -420,12 +420,44 @@ def test_dashboard_save_keeps_agent_provenance(request_dashboard, tmp_path):
     assert result.imported == 1
 
 
-@pytest.mark.parametrize("query", ["?days=3", "?days=abc", ""])
-def test_analytics_tab_renders_without_refresh(request_dashboard, query):
-    """Serve the analytics tab as the current tab, tolerating a bad range."""
-    status, _, body = request_dashboard(f"/analytics{query}")
+def test_analytics_tab_serves_its_shell_without_refresh(request_dashboard):
+    """The tab is a static shell; its script polls the API instead of reloading."""
+    status, _, body = request_dashboard("/analytics")
 
     assert status == "200 OK"
     assert b"<h2>Analytics</h2>" in body
     assert b'<a href="/analytics" aria-current="page">Analytics</a>' in body
     assert b'http-equiv="refresh"' not in body
+    assert b'<script src="/static/analytics.js">' in body
+
+
+@pytest.mark.parametrize("query", ["", "?from=2026-09-01&to=2026-09-05"])
+def test_analytics_api_returns_the_payload(request_dashboard, query):
+    """The API answers with JSON for the default and an explicit range."""
+    status, headers, body = request_dashboard(f"/api/analytics{query}")
+
+    assert status == "200 OK"
+    assert headers["Content-Type"] == "application/json"
+    payload = json.loads(body)
+    assert {"meta", "live", "summary", "sessions", "daily"} <= payload.keys()
+
+
+@pytest.mark.parametrize(
+    "query", ["?from=bad", "?from=2026-09-05&to=2026-09-01", "?to=2026-13-01"]
+)
+def test_analytics_api_rejects_bad_ranges(request_dashboard, query):
+    """Malformed or backwards dates are a client error."""
+    status, _, body = request_dashboard(f"/api/analytics{query}")
+
+    assert status == "400 Bad Request"
+    assert b"YYYY-MM-DD" in body
+
+
+def test_static_files_are_allowlisted(request_dashboard):
+    """Only the listed static files are served, with their content types."""
+    status, headers, _ = request_dashboard("/static/analytics.js")
+    assert status == "200 OK"
+    assert headers["Content-Type"].startswith("text/javascript")
+
+    for path in ["/static/missing.js", "/static/../__init__.py"]:
+        assert request_dashboard(path)[0] == "404 Not Found"

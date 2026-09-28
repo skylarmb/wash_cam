@@ -1,0 +1,363 @@
+/* Analytics tab. Colors are role tokens; analytics.js reads the chart ones. */
+.viz-root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface-1: #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.1);
+  --wash: #2a78d6;
+  --vacuum: #1baf7a;
+  --revenue: #eb6834;
+  --baseline: #898781;
+  --outage: rgba(137, 135, 129, 0.16);
+  --ramp-0: #f0efec;
+  --ramp-1: #cde2fb;
+  --ramp-2: #86b6ef;
+  --ramp-3: #3987e5;
+  --ramp-4: #1c5cab;
+  --ramp-5: #0d366b;
+  --good: #0ca30c;
+  --warning: #fab219;
+  --accent-ink: #1c5cab;
+}
+
+/* Dark values are selected steps of the same ramps, not an inversion. */
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .viz-root {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface-1: #1a1a19;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.1);
+    --wash: #3987e5;
+    --vacuum: #199e70;
+    --revenue: #d95926;
+    --outage: rgba(137, 135, 129, 0.2);
+    --ramp-0: #383835;
+    --ramp-1: #184f95;
+    --ramp-2: #256abf;
+    --ramp-3: #3987e5;
+    --ramp-4: #6da7ec;
+    --ramp-5: #b7d3f6;
+    --accent-ink: #86b6ef;
+  }
+
+  /* The shared layout is light-only, so darken it around this tab. */
+  :root:where(:not([data-theme="light"])) body:has(.viz-root) {
+    background: #0d0d0d;
+    color: #ffffff;
+  }
+  :root:where(:not([data-theme="light"])) body:has(.viz-root) nav a {
+    color: #c3c2b7;
+  }
+}
+
+:root[data-theme="dark"] .viz-root {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface-1: #1a1a19;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255, 255, 255, 0.1);
+  --wash: #3987e5;
+  --vacuum: #199e70;
+  --revenue: #d95926;
+  --outage: rgba(137, 135, 129, 0.2);
+  --ramp-0: #383835;
+  --ramp-1: #184f95;
+  --ramp-2: #256abf;
+  --ramp-3: #3987e5;
+  --ramp-4: #6da7ec;
+  --ramp-5: #b7d3f6;
+  --accent-ink: #86b6ef;
+}
+
+/* The charts want more width than the other tabs' 1000px column. */
+body:has(.viz-root) {
+  max-width: 1280px;
+  background: #f9f9f7;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.viz-root {
+  color: var(--text-primary);
+  display: grid;
+  gap: 1rem;
+  padding-bottom: 2rem;
+}
+
+.viz-root h2,
+.viz-root h3 {
+  margin: 0;
+}
+
+.viz-root h3 {
+  font-size: 1rem;
+}
+
+.viz-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+}
+
+/* Range presets and custom dates sit in one row above every chart. */
+.range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.range button,
+.toggle button {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.875rem;
+}
+
+.range button[aria-pressed="true"],
+.toggle button[aria-pressed="true"] {
+  border-color: var(--wash);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.range label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.range input {
+  width: auto;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+}
+
+.health {
+  margin: 0 0 0 auto;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.health[data-state="stale"]::before {
+  content: "⚠ ";
+  color: var(--warning);
+}
+
+.health[data-state="ok"]::before {
+  content: "● ";
+  color: var(--good);
+}
+
+.panel {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface-1);
+}
+
+.sub {
+  margin: 0.3rem 0 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.panel--wide {
+  grid-column: 1 / -1;
+}
+
+.chart {
+  width: 100%;
+  height: 300px;
+  position: relative;
+}
+
+.chart--short {
+  height: 220px;
+}
+
+.chart--calendar {
+  height: 170px;
+}
+
+/* An empty chart shows a sentence instead of blank axes. */
+.chart[data-empty]::after {
+  content: attr(data-empty);
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  color: var(--text-muted);
+  text-align: center;
+  font-size: 0.875rem;
+}
+
+/* Live strip: one card per configured bay. */
+.live {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+.bay-card {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--grid);
+  border-radius: 0.5rem;
+}
+
+.bay-card[data-occupied="true"] {
+  border-left-color: var(--bay-color, var(--wash));
+}
+
+.bay-card__name {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.bay-card__state {
+  margin-top: 0.15rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.bay-card__money {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.bay-card[data-occupied="false"] .bay-card__state {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* KPI tiles. */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.6rem;
+}
+
+.kpi {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface-1);
+}
+
+.kpi__label {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.kpi__value {
+  margin-top: 0.2rem;
+  font-size: 1.6rem;
+  font-weight: 600;
+}
+
+.kpi__hint {
+  margin-top: 0.1rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+/* How covered time splits across 0..all wash bays busy. */
+.levels {
+  display: flex;
+  gap: 2px;
+  height: 22px;
+  margin-top: 0.5rem;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.levels span {
+  min-width: 2px;
+}
+
+.levels-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.9rem;
+  margin-top: 0.4rem;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.levels-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 0.3rem;
+  border-radius: 2px;
+  vertical-align: -1px;
+}
+
+.toggle {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+
+/* display: flex would otherwise override the hidden attribute. */
+.toggle[hidden] {
+  display: none;
+}
+
+.note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+@media (max-width: 720px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .health {
+    margin-left: 0;
+  }
+
+  .chart {
+    height: 260px;
+  }
+}

@@ -66,6 +66,22 @@ BAYS = {
     "vac_0": ((0, 215), (180, 215), (205, 340), (0, 340)),
 }
 
+# Display names for each bay ID prefix, which also sets the bay's kind.
+BAY_KINDS = {"bay": "wash", "vac": "vacuum"}
+BAY_TITLES = {"bay": "Bay", "vac": "Vacuum"}
+
+
+def bay_kind(bay_id: str) -> str:
+    """Return "wash" or "vacuum" for a bay ID such as `bay_2` or `vac_0`."""
+    return BAY_KINDS[bay_id.partition("_")[0]]
+
+
+def bay_title(bay_id: str) -> str:
+    """Turn a bay ID such as `vac_0` into a display name such as `Vacuum 0`."""
+    prefix, _, number = bay_id.partition("_")
+    return f"{BAY_TITLES[prefix]} {number}"
+
+
 # A capture is night when more than NIGHT_DARK_FRACTION of its pixels are darker
 # than DARK_PIXEL_LEVEL (grayscale 0-255). Mean brightness cannot tell the two
 # apart, because auto-exposure lifts night frames to daytime levels. Tuned on
