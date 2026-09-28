@@ -138,6 +138,41 @@ def test_live_shows_only_sessions_current_at_the_latest_frame(database):
     assert bays["bay_1"]["occupied"] is False
 
 
+def set_brightness(database, start_min, end_min, level):
+    """Set the stored brightness of captures between two minute offsets."""
+    with closing(sqlite3.connect(database)) as connection, connection:
+        connection.execute(
+            "UPDATE image_detections SET brightness = ? "
+            "WHERE captured_at BETWEEN ? AND ?",
+            (level, format_time(minutes(start_min)), format_time(minutes(end_min))),
+        )
+
+
+def test_frames_too_dark_to_see_count_as_an_outage(database):
+    """Near-black captures break coverage instead of looking like empty bays."""
+    add_frames(database, 0, 60)
+    set_brightness(database, 0, 60, 30.0)
+    set_brightness(database, 20, 40, 1.4)
+
+    payload = build(database, 60.1)
+
+    assert payload["summary"]["covered_s"] == pytest.approx(40 * 60 - 30)
+    assert payload["summary"]["outages"] == 1
+
+
+def test_live_is_unknown_when_the_newest_frame_is_too_dark(database):
+    """A dark newest frame can't show who is in a bay."""
+    add_frames(database, 0, 30)
+    add_visit(database, "bay_2", 25, 30, end_reason="open")
+    set_brightness(database, 29, 30, 1.4)
+
+    live = build(database, 30.1)["live"]
+
+    assert live["dark"] is True
+    assert live["stale"] is True
+    assert not any(bay["occupied"] for bay in live["bays"])
+
+
 def test_live_is_stale_once_frames_stop(database):
     """A camera silent for longer than the gap limit shows nothing as occupied."""
     add_frames(database, 0, 30)

@@ -2,6 +2,9 @@
 
 import os
 
+import cv2
+import numpy as np
+
 from wash_cam import heartbeat
 
 # An arbitrary fixed clock, in epoch seconds.
@@ -117,3 +120,56 @@ def test_entries_append_to_existing_notes(tmp_path):
 
     assert notifications.read_text().startswith("## Earlier note\n\n- Keep me.\n\n")
     assert len(entries(notifications)) == 2
+
+
+def image(images, name, level):
+    """Write a real capture of one flat brightness (0-255)."""
+    path = images / name
+    cv2.imwrite(str(path), np.full((34, 127, 3), level, dtype=np.uint8))
+    return path
+
+
+def test_dark_captures_are_reported_once_after_the_limit(tmp_path):
+    """A run of near-black captures is reported once, after DARK_AFTER."""
+    notifications = tmp_path / "NOTIFICATIONS.md"
+    dark = image(tmp_path, "dark.jpg", 1)
+    darkness = heartbeat.Darkness()
+
+    darkness = heartbeat.check_dark(dark, notifications, NOW, darkness)
+    assert entries(notifications) == []
+    later = NOW + heartbeat.DARK_AFTER - 1
+    darkness = heartbeat.check_dark(dark, notifications, later, darkness)
+    assert entries(notifications) == []
+    later = NOW + heartbeat.DARK_AFTER
+    darkness = heartbeat.check_dark(dark, notifications, later, darkness)
+    darkness = heartbeat.check_dark(dark, notifications, later + 600, darkness)
+
+    assert [line.split(": heartbeat, ")[1] for line in entries(notifications)] == [
+        "captures too dark"
+    ]
+    assert darkness.reported
+
+
+def test_visible_captures_after_a_reported_run_write_a_recovery(tmp_path):
+    """Recovery is noted only for a run that was reported."""
+    notifications = tmp_path / "NOTIFICATIONS.md"
+    dark = image(tmp_path, "dark.jpg", 1)
+    lit = image(tmp_path, "lit.jpg", 30)
+
+    darkness = heartbeat.check_dark(dark, notifications, NOW, heartbeat.Darkness())
+    # A short dark spell that recovers before the limit writes nothing.
+    darkness = heartbeat.check_dark(lit, notifications, NOW + 60, darkness)
+    assert entries(notifications) == []
+    assert darkness == heartbeat.Darkness()
+
+    darkness = heartbeat.check_dark(dark, notifications, NOW, darkness)
+    darkness = heartbeat.check_dark(dark, notifications, NOW + 900, darkness)
+    darkness = heartbeat.check_dark(lit, notifications, NOW + 1200, darkness)
+
+    headings = entries(notifications)
+    assert [line.split(": heartbeat, ")[1] for line in headings] == [
+        "captures too dark",
+        "captures visible again",
+    ]
+    assert "about 20 min" in notifications.read_text()
+    assert darkness == heartbeat.Darkness()

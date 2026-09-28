@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from wash_cam.config import BAYS, CAPTURE_INTERVAL, DATABASE_PATH
+from wash_cam.config import BAYS, CAPTURE_INTERVAL, DATABASE_PATH, UNUSABLE_BRIGHTNESS
 
 __all__ = [
     "Session",
@@ -146,8 +146,11 @@ def bay_frames(db: sqlite3.Connection, bay_id: str, after: str | None) -> list[F
         "FROM image_detections AS d, json_each(d.metadata, '$.vehicles.bays') AS bay "
         "WHERE d.captured_at IS NOT NULL AND d.captured_at > coalesce(?, '') "
         "AND json_extract(bay.value, '$.bay_id') = ? "
+        # A frame too dark to see is missing, not empty: skipping it lets a run
+        # of dark frames end a session as a gap instead of a departure.
+        "AND (d.brightness IS NULL OR d.brightness >= ?) "
         "ORDER BY d.captured_at",
-        (after, bay_id),
+        (after, bay_id, UNUSABLE_BRIGHTNESS),
     )
     # Stored times are UTC without an offset.
     return [

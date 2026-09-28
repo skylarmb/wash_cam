@@ -220,9 +220,9 @@
       parts.push("No captures yet");
     } else {
       const age = (payload.meta.now - live.last_frame) / 1000;
-      parts.push(
-        live.stale ? `Camera offline for ${clock(age)}` : `Last frame ${Math.round(age)} s ago`,
-      );
+      if (live.dark) parts.push("Latest frame is too dark to see");
+      else if (live.stale) parts.push(`Camera offline for ${clock(age)}`);
+      else parts.push(`Last frame ${Math.round(age)} s ago`);
     }
     if (summary.span_s > 0) {
       parts.push(`${percent(summary.covered_s / summary.span_s)} of range captured`);
@@ -267,7 +267,7 @@
       card.dataset.occupied = String(bay.occupied);
       if (payload.live.stale) {
         stateText.textContent = "Unknown";
-        money.textContent = "camera offline";
+        money.textContent = payload.live.dark ? "frame too dark" : "camera offline";
       } else if (bay.occupied) {
         const seconds = (now - bay.since) / 1000;
         stateText.textContent = clock(seconds);
