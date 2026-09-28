@@ -6,10 +6,14 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+from contextlib import closing
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 from wsgiref.util import setup_testing_defaults
 
+import cv2
+import numpy as np
 import pytest
 from werkzeug import serving
 
@@ -461,3 +465,84 @@ def test_static_files_are_allowlisted(request_dashboard):
 
     for path in ["/static/missing.js", "/static/../__init__.py"]:
         assert request_dashboard(path)[0] == "404 Not Found"
+
+
+def add_capture(database, images, name, captured_at):
+    """Store one capture image and its detection time for visit labeling."""
+    images.mkdir(exist_ok=True)
+    cv2.imwrite(str(images / name), np.zeros((340, 1270, 3), dtype=np.uint8))
+    with closing(sqlite3.connect(database)) as connection, connection:
+        connection.execute(
+            "INSERT INTO image_detections (image_path, metadata, model, captured_at) "
+            "VALUES (?, '{}', 'test', ?)",
+            (name, captured_at),
+        )
+
+
+def test_visit_labeling_tab_is_a_nav_tab(request_dashboard):
+    """The tab serves its shell and marks itself current."""
+    status, _, body = request_dashboard("/visits")
+
+    assert status == "200 OK"
+    assert b'<a href="/visits" aria-current="page">Visit labeling</a>' in body
+    assert b'<script src="/static/visits.js">' in body
+
+
+def test_visit_labeling_round_trip(request_dashboard, tmp_path):
+    """Open a range, mark an event, and read it back with the bay's crop."""
+    database = dashboard.DATABASE_PATH
+    add_capture(database, dashboard.IMAGES_DIR, "a.jpg", "2026-09-27 03:00:00.000")
+    add_capture(database, dashboard.IMAGES_DIR, "b.jpg", "2026-09-27 03:00:15.000")
+
+    # The dashboard sends local wall-clock times, whatever the test's timezone.
+    first = datetime(2026, 9, 27, 3, 0, tzinfo=timezone.utc).astimezone()
+    start, end = first - timedelta(minutes=1), first + timedelta(minutes=1)
+    status, _, body = request_dashboard(
+        "/api/visits/windows",
+        "POST",
+        {"start": f"{start:%Y-%m-%dT%H:%M}", "end": f"{end:%Y-%m-%dT%H:%M}"},
+    )
+    assert status == "200 OK", body
+    window = json.loads(body)["ids"][0]
+    status, _, _ = request_dashboard(
+        "/api/visits/event",
+        "POST",
+        {
+            "window_id": window,
+            "image_path": "b.jpg",
+            "event": "arrive",
+            "present": True,
+        },
+    )
+    assert status == "200 OK"
+
+    status, _, body = request_dashboard(f"/api/visits/window?id={window}")
+    detail = json.loads(body)
+    assert status == "200 OK"
+    assert detail["events"] == {"b.jpg": ["arrive"]}
+    assert [frame["image_path"] for frame in detail["frames"]] == ["a.jpg", "b.jpg"]
+    status, headers, body = request_dashboard(
+        f"/api/visits/crop?id={window}&image_path=a.jpg"
+    )
+    assert status == "200 OK"
+    assert headers["Content-Type"] == "image/jpeg"
+    assert body[:2] == b"\xff\xd8"
+
+
+@pytest.mark.parametrize(
+    ("path", "method", "payload"),
+    [
+        ("/api/visits/window?id=abc", "GET", None),
+        ("/api/visits/window?id=99", "GET", None),
+        ("/api/visits/crop?id=99&image_path=a.jpg", "GET", None),
+        ("/api/visits/windows", "POST", {"start": "soon", "end": "later"}),
+        ("/api/visits/event", "POST", {"window_id": True, "event": "arrive"}),
+        ("/api/visits/event", "POST", ["not", "an", "object"]),
+    ],
+)
+def test_visit_labeling_rejects_bad_requests(request_dashboard, path, method, payload):
+    """Malformed IDs, times, and bodies are client errors, never crashes."""
+    status, _, body = request_dashboard(path, method, payload)
+
+    assert status == "400 Bad Request", body
+    assert "error" in json.loads(body)

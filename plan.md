@@ -46,6 +46,13 @@ This is a hobby project. Loose accuracy is acceptable.
   owner totals will ever exist (user, 2026-09-27). Revenue can only be
   estimated, never checked against real money. Paid-time accuracy has to come
   from labeled frames of active washing, not from sales data.
+- **Token pricing (user, 2026-09-27):** $1 buys 1 token and a token buys
+  1 minute. A wash starts at 3 tokens, a 3-minute minimum. The meter runs
+  continuously once started, so paid time runs from a visit's first wash start
+  to its last wash stop, rounded up to whole tokens. Any active cleaning
+  counts as washing, including a customer's own bucket. Until washing is
+  detected, revenue shows the maximum possible, which treats all bay time as
+  paid.
 - **Capture interval:** 15 s. Each session edge is uncertain by up to one
   interval. At 15 s, about 600 MB of images accumulate per day.
 - **Derived data is rebuildable.** Sessions and revenue are recomputed from
@@ -61,7 +68,7 @@ Follow the red/green workflow in `AGENTS.md` for every step.
 
 ### Owners
 
-Owners are Agent Mail agent names. Numbered rows run in that order. ScarletEagle is the only agent that merges into `main` and deploys. Other agents push feature branches and send the SHA after QA passes. Reserve files before you edit them. Tell all
+Owners are Agent Mail agent names. Numbered rows run in that order. ScarletEagle is the only agent that merges into `main` and deploys. While ScarletEagle is offline (2026-09-27), Rowan has SapphireCompass merge and deploy. Other agents push feature branches and send the SHA after QA passes. Reserve files before you edit them. Tell all
 agents which migration number you take before you write it.
 
 | Work | Main files | Owner |
@@ -73,8 +80,9 @@ agents which migration number you take before you write it.
 | 3. Step 7: nightly backups | `scripts/backup_db.sh`, one entry in `scripts/install_services.sh` | SilentIsland (done, deployed `88f4bcb`) |
 | 4. Step 6: Analytics tab without revenue (heatmap, utilization, durations) | `src/wash_cam/dashboard/analytics.py` and its tests, route registration in `dashboard/__init__.py` | SapphireCompass and SilentIsland (done, deployed `88aa130`) |
 | Step 5: threshold tuning (after labels are imported) | `src/wash_cam/sessions.py` | Paused (first sweep done; the `close 4` retest waits for the new labeling pass) |
-| Step 5: labeling | label files only | **Paused by Skylar (2026-09-27).** The next pass adds classes such as active washing versus a parked car, and it can use other models. The rubric changes. Batch `20260927-0700_20260927-1000` (713 frames) is exported but not labeled. Keep it as data. |
+| Step 5: labeling | label files only | **Paused by Skylar (2026-09-27).** Visit labeling (step 8) is the new pass for active washing. Batch `20260927-0700_20260927-1000` (713 frames) is exported but not labeled. Keep it as data. |
 | Step 4 and revenue in step 6 (pricing known) | `config.py` pricing, a revenue function, the Analytics tab | SilentIsland (done, deployed `5f0b8da` and `bd616a4`) |
+| Step 8: paid time and car swaps | `src/wash_cam/visit_labels.py`, `dashboard/visits.py`, migration `005` | SapphireCompass (phase 1 done) |
 | Coordination: `plan.md` status and `AGENTS.md` | `plan.md`, `AGENTS.md` | ScarletEagle |
 | QA: correctness, validation, simplicity, and scope reviews | review findings only | StormyCliff |
 
@@ -175,8 +183,9 @@ agents which migration number you take before you write it.
   - any starting price or minimum purchase
   - the rounding increment
   - vacuum pricing, which may differ from the wash bays
-- [ ] Add pricing to configuration and a function that turns a session into
-  estimated revenue. Revenue is recomputed whenever prices change.
+- [x] Add pricing to configuration and a function that turns a session into
+  estimated revenue. Revenue is recomputed whenever prices change. Changed
+  to whole tokens on 2026-09-27; see Decisions.
 
 ### Step 6: Analytics dashboard
 
@@ -191,6 +200,31 @@ agents which migration number you take before you write it.
 - [ ] Estimate missed business: find times when every wash bay was full and
   cars were waiting or left. This needs a queue region for the foreground,
   defined like `BAYS`. Until then, "all bays busy" time is the proxy.
+
+### Step 8: Paid time and car swaps
+
+Occupied time overstates revenue: cars sit without the meter running. Sessions
+also merge two cars when one leaves and another arrives within one frame.
+
+- [x] Phase 1 (2026-09-27): token pricing and "max possible" revenue. The
+  Visit labeling tab lets Rowan label arrive, wash start, wash stop, and leave
+  for one bay's crop at a time as ground truth. Agents label the same windows
+  with `visit-export` and `visit-import`, and `visit-compare` measures how well
+  they agree. See `.agents/docs/visit-labels.md`.
+- [ ] Label several windows, by hand and by agent, day and night, and check
+  agreement.
+- [ ] Phase 2, signals:
+  - keep person detections (the model finds them, but `detect` drops them),
+    assign each to a bay by foot position, and backfill;
+  - measure pixel change inside each bay from frame to frame;
+  - store each car's color signature and box position per frame.
+- [ ] Phase 3, estimates:
+  - find wash start and stop from the signals, debounced like sessions and
+    tuned against the labels; a small classifier trained on the labels if
+    thresholds fall short;
+  - split a session when the car's appearance and position both change and
+    stay changed (a swap);
+  - show "max possible" next to "best estimate" on the Analytics tab.
 
 ### Step 7: Operations (alongside the other steps)
 

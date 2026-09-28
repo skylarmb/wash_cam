@@ -89,6 +89,14 @@
     return isoDate(new Date(year, month - 1, day + days));
   }
 
+  /** The most a visit of this length could pay, mirroring analytics.price(). */
+  function visitPrice(pricing, kind, seconds) {
+    if (kind === "vacuum") return (pricing.vacuum_rate_per_min * seconds) / 60;
+    // The allowance matches the server: float error never buys an extra token.
+    const needed = Math.ceil(seconds / 60 / pricing.token_minutes - 1e-6);
+    return Math.max(pricing.wash_start_tokens, needed) * pricing.token_price;
+  }
+
   // ---------- theme ----------
 
   /** Read the role tokens from CSS so charts follow light and dark mode. */
@@ -262,12 +270,8 @@
         money.textContent = "camera offline";
       } else if (bay.occupied) {
         const seconds = (now - bay.since) / 1000;
-        const estimate =
-          kind === "vacuum"
-            ? (pricing.vacuum_rate_per_min * seconds) / 60
-            : Math.max(pricing.wash_minimum, (pricing.wash_rate_per_min * seconds) / 60);
         stateText.textContent = clock(seconds);
-        money.textContent = `${dollars(estimate, 2)} est. so far`;
+        money.textContent = `up to ${dollars(visitPrice(pricing, kind, seconds), 2)} so far`;
       } else {
         stateText.textContent = "Empty";
         money.textContent = " ";
@@ -280,7 +284,7 @@
     const { summary, meta } = payload;
     const washBays = payload.concurrency.wash_bays;
     const tiles = [
-      ["Estimated revenue", dollars(summary.revenue), "complete visits only"],
+      ["Max possible revenue", dollars(summary.revenue), "all bay time, whole tokens"],
       ["Wash visits", summary.wash_visits.toLocaleString(), `${summary.vacuum_visits} vacuum`],
       ["Median wash", minutesText(summary.median_wash_s), "arrival to departure"],
       [
@@ -289,7 +293,7 @@
         `all ${washBays} wash bays taken`,
       ],
       [
-        "Minimum charge only",
+        "Start tokens only",
         summary.minimum_only_share == null ? "–" : percent(summary.minimum_only_share),
         `washes ≤ ${Math.round(meta.pricing.minimum_break_even_s / 60)} min`,
       ],
@@ -332,7 +336,7 @@
             const visit = data.visit;
             const bay = bays[lane[visit.bay_id]].label;
             const status = {
-              left: dollars(visit.revenue, 2) + " est.",
+              left: `up to ${dollars(visit.revenue, 2)}`,
               open: "still here",
               gap: "cut off by an outage",
             }[visit.end_reason];
@@ -513,14 +517,14 @@
     const isToday = pace.day === isoDate(new Date(payload.meta.now));
     if (!pace.typical) {
       sub.textContent =
-        `${dayName}: ${dollars(last[1])} est.${isToday ? " so far" : ""}. The typical-day curve appears once ` +
+        `${dayName}: up to ${dollars(last[1])}${isToday ? " so far" : ""}. The typical-day curve appears once ` +
         "there is an earlier day with at least half of it captured.";
     } else {
       // Compare against the typical curve at the same minute of the day.
       const typicalNow = pace.typical.filter(([minute]) => minute <= last[0]).pop()[1];
       const diff = last[1] - typicalNow;
       sub.textContent =
-        `${dayName}: ${dollars(last[1])} est. by ${minuteLabel(last[0])}, ` +
+        `${dayName}: up to ${dollars(last[1])} by ${minuteLabel(last[0])}, ` +
         `${dollars(Math.abs(diff))} ${diff >= 0 ? "ahead of" : "behind"} a typical day ` +
         `(average of ${pace.baseline_days.length} earlier day${pace.baseline_days.length === 1 ? "" : "s"}).`;
     }
@@ -608,8 +612,8 @@
     const breakEven = payload.meta.pricing.minimum_break_even_s / 60;
     const sub = document.getElementById("swarm-sub");
     sub.textContent =
-      `Each dot is a finished visit. Washes left of the ${breakEven.toFixed(0)}-minute line pay only ` +
-      `the ${dollars(payload.meta.pricing.wash_minimum)} minimum. Longer visits are pinned to the right edge.`;
+      `Each dot is a finished visit. Washes left of the ${breakEven.toFixed(0)}-minute line fit in the ` +
+      `${payload.meta.pricing.wash_start_tokens}-token start. Longer visits are pinned to the right edge.`;
     const element = document.getElementById(id);
     element.style.height = `${bays.length * 44 + 60}px`;
     if (setEmpty(id, complete.length ? null : "No finished visits in this range.")) return;
@@ -657,7 +661,7 @@
           ...tooltip,
           formatter: ({ data, seriesName }) =>
             `<b>${seriesName}</b><br>${dateTime(data.visit.start)}<br>` +
-            `${minutesText(data.visit.duration_s)} · ${dollars(data.visit.revenue, 2)} est.`,
+            `${minutesText(data.visit.duration_s)} · up to ${dollars(data.visit.revenue, 2)}`,
         },
         xAxis: {
           type: "value",
@@ -847,7 +851,7 @@
             const row = rows[points[0].dataIndex];
             return `<b>${labels[row.bay_id]}</b><br>` +
               points.map((point) => `${point.marker}${point.seriesName}: <b>${percent(point.value)}</b>`).join("<br>") +
-              `<br>busy ${percent(row.share)} of captured time · ${row.visits} visits · ${dollars(row.revenue)} est.`;
+              `<br>busy ${percent(row.share)} of captured time · ${row.visits} visits · up to ${dollars(row.revenue)}`;
           },
         },
         xAxis: {
@@ -899,7 +903,7 @@
               day: "numeric",
             });
             return day.covered_s
-              ? `<b>${name}</b><br>${dollars(day.revenue)} est. · ${day.visits} visits<br>` +
+              ? `<b>${name}</b><br>up to ${dollars(day.revenue)} · ${day.visits} visits<br>` +
                   `${(day.covered_s / 3600).toFixed(1)} h captured`
               : `<b>${name}</b><br>no captures`;
           },
@@ -938,9 +942,10 @@
   function renderPricingNote(payload) {
     const pricing = payload.meta.pricing;
     document.getElementById("pricing-note").textContent =
-      `All revenue is estimated from occupied time, an upper bound on paid time: wash bays at ` +
-      `${dollars(pricing.wash_rate_per_min, 2)}/min with a ${dollars(pricing.wash_minimum, 2)} minimum, ` +
-      `the vacuum at ${dollars(pricing.vacuum_rate_per_min, 2)}/min (a placeholder price). ` +
+      `Revenue is the most each visit could have paid: all of its bay time, bought in whole tokens ` +
+      `(a ${dollars(pricing.token_price, 2)} token buys ${pricing.token_minutes} min, ` +
+      `${pricing.wash_start_tokens} tokens to start). Cars can sit without the meter running, so real ` +
+      `takings are lower. The vacuum is ${dollars(pricing.vacuum_rate_per_min, 2)}/min (a placeholder price). ` +
       `Times are ${payload.meta.tz}. Updates every ${POLL_MS / 1000} s.`;
   }
 

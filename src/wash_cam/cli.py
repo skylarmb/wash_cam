@@ -15,6 +15,7 @@ from wash_cam import (
     labeling,
     session_eval,
     sessions,
+    visit_labels,
     watch,
 )
 from wash_cam.camera import calibrate
@@ -152,6 +153,24 @@ def main() -> None:
     )
     command.add_argument("path", type=Path, help="The batch's labels.jsonl file.")
     command.set_defaults(run=labeling.run_import)
+    command = commands.add_parser(
+        "visit-export",
+        help="Export per-bay crops in a local time window for an agent to label visits.",
+    )
+    command.add_argument(
+        "--start", required=True, help='Local time, e.g. "2026-09-27 12:00".'
+    )
+    command.add_argument("--end", required=True, help="Local time, inclusive.")
+    command.set_defaults(run=visit_labels.run_export)
+    command = commands.add_parser(
+        "visit-import", help="Import a labeling agent's visit events.jsonl."
+    )
+    command.add_argument("path", type=Path, help="The batch's events.jsonl file.")
+    command.set_defaults(run=visit_labels.run_import)
+    command = commands.add_parser(
+        "visit-compare", help="Compare agent visit labels with completed human ones."
+    )
+    command.set_defaults(run=visit_labels.run_compare)
     args = parser.parse_args()
     arguments = vars(args)
     arguments.pop("command", None)

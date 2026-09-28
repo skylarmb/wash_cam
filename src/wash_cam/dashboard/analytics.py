@@ -1,12 +1,14 @@
 """Analytics tab data: one JSON payload built from captures and sessions.
 
 Everything is measured against covered time, the time captures were actually
-running, so camera outages never look like quiet hours. Revenue is an estimate
-from the prices in config.py; no owner totals exist to check it against.
+running, so camera outages never look like quiet hours. Revenue is the most a
+visit could have paid: all its bay time bought in whole tokens at the prices in
+config.py. The site is coin-op, so no sales records exist to check it against.
 The page itself is static (static/analytics.js) and polls `build` via
 `/api/analytics`.
 """
 
+import math
 import sqlite3
 import statistics
 from bisect import bisect_right
@@ -20,9 +22,10 @@ from pathlib import Path
 from wash_cam.config import (
     BAYS,
     CAPTURE_INTERVAL,
+    TOKEN_MINUTES,
+    TOKEN_PRICE,
     VACUUM_RATE_PER_MIN,
-    WASH_MINIMUM,
-    WASH_RATE_PER_MIN,
+    WASH_START_TOKENS,
     bay_kind,
     bay_title,
 )
@@ -74,12 +77,19 @@ class DayTotal:
     revenue: float = 0.0
 
 
+def wash_tokens(seconds: float) -> int:
+    """Whole tokens a wash of this length buys, never fewer than the start price."""
+    # The small allowance keeps float error from buying an extra token at an
+    # exact boundary, e.g. 180.0000001 s.
+    needed = math.ceil(seconds / 60 / TOKEN_MINUTES - 1e-6)
+    return max(WASH_START_TOKENS, needed)
+
+
 def price(bay_id: str, seconds: float) -> float:
     """Estimated dollars for a visit of this length at the configured prices."""
-    minutes = seconds / 60
     if bay_kind(bay_id) == "vacuum":
-        return VACUUM_RATE_PER_MIN * minutes
-    return max(WASH_MINIMUM, WASH_RATE_PER_MIN * minutes)
+        return VACUUM_RATE_PER_MIN * seconds / 60
+    return wash_tokens(seconds) * TOKEN_PRICE
 
 
 def session_revenue(session: Session) -> float:
@@ -515,7 +525,7 @@ def build(
         session.duration_s for session in complete if bay_kind(session.bay_id) == "wash"
     ]
     # Wash visits no longer than this pay only the minimum charge.
-    minimum_s = WASH_MINIMUM / WASH_RATE_PER_MIN * 60
+    minimum_s = WASH_START_TOKENS * TOKEN_MINUTES * 60
     return {
         "meta": {
             "now": millis(now),
@@ -535,8 +545,9 @@ def build(
                 for bay_id in BAYS
             ],
             "pricing": {
-                "wash_rate_per_min": WASH_RATE_PER_MIN,
-                "wash_minimum": WASH_MINIMUM,
+                "token_price": TOKEN_PRICE,
+                "token_minutes": TOKEN_MINUTES,
+                "wash_start_tokens": WASH_START_TOKENS,
                 "vacuum_rate_per_min": VACUUM_RATE_PER_MIN,
                 "minimum_break_even_s": minimum_s,
             },
