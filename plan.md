@@ -40,6 +40,12 @@ This is a hobby project. Loose accuracy is acceptable.
   meter running. We accept this error for now and treat bay time as an upper
   bound on paid time. A fine-tuned model that classifies active washing
   (a person with a wand, visible spray) is planned later. See Future work.
+- **There is no revenue ground truth, and there never will be.** The car wash
+  is fully coin-op. Customers put cash into a changer for tokens and spend the
+  tokens at each bay's meter. Neither machine keeps records we can get, and no
+  owner totals will ever exist (user, 2026-09-27). Revenue can only be
+  estimated, never checked against real money. Paid-time accuracy has to come
+  from labeled frames of active washing, not from sales data.
 - **Capture interval:** 15 s. Each session edge is uncertain by up to one
   interval. At 15 s, about 600 MB of images accumulate per day.
 - **Derived data is rebuildable.** Sessions and revenue are recomputed from
@@ -156,15 +162,15 @@ agents which migration number you take before you write it.
     close 4 matched 19, with 1 miss and 0 phantoms. A higher open value only
     adds misses. Close 4 removes phantoms and end error. Keep open 2 and test
     close 4 again on a daytime batch before changing defaults.
-- [ ] Get daily revenue totals from the owner if possible. A week of totals
-  would be the best check on overall accuracy.
+- Dropped 2026-09-27: checking against owner revenue totals. None exist or
+  ever will; see Decisions.
 
 ### Step 4: Revenue model
 
 - [x] Wait for pricing from the user. Skylar gave it on 2026-09-27: wash
   bays cost $1 per minute with a $3 minimum per session, and the vacuum costs
-  $0.25 per minute (a placeholder). No owner totals exist, so revenue is a
-  rough estimate. The original questions were:
+  $0.25 per minute (a placeholder). No sales records exist or ever will, so
+  revenue stays a rough estimate. The original questions were:
   - the per-minute price
   - any starting price or minimum purchase
   - the rounding increment
@@ -212,7 +218,9 @@ agents which migration number you take before you write it.
 ## Future work
 
 - **Active-washing classifier:** fine-tune a vision model to classify whether
-  someone is actively washing. Paid time would then replace bay time.
+  someone is actively washing. Paid time would then replace bay time. With
+  no sales data, labeled active-washing frames are also the only way to
+  check paid-time accuracy.
 - **Night fine-tune:** fine-tune the detector if validation shows that night
   frames are its weak spot. Known night misses include occluded, foam-covered
   cars.
