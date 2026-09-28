@@ -133,7 +133,8 @@ def test_live_shows_only_sessions_current_at_the_latest_frame(database):
     assert live["stale"] is False
     assert bays["bay_2"]["occupied"] is True
     assert bays["bay_2"]["elapsed_s"] == pytest.approx(5.25 * 60)
-    assert bays["bay_2"]["revenue"] == pytest.approx(5.25)
+    # 5.25 minutes buys 6 whole tokens.
+    assert bays["bay_2"]["revenue"] == pytest.approx(6.0)
     assert bays["bay_1"]["occupied"] is False
 
 
@@ -244,14 +245,15 @@ def test_pace_has_no_baseline_without_earlier_days(database):
 @pytest.mark.parametrize(
     ("bay_id", "length_min", "dollars"),
     [
-        ("bay_1", 2, 3.00),  # Below the minimum.
-        ("bay_1", 3, 3.00),  # Exactly the minimum.
-        ("bay_1", 4.5, 4.50),  # Per-minute rate above the minimum, not rounded.
-        ("vac_0", 2, 0.50),  # Vacuum: per-minute rate, no minimum.
+        ("bay_1", 2, 3.00),  # Inside the 3-token start.
+        ("bay_1", 3, 3.00),  # Exactly the start.
+        ("bay_1", 3.01, 4.00),  # Any time past a token buys the next one.
+        ("bay_1", 4.5, 5.00),
+        ("vac_0", 2, 0.50),  # Vacuum: per-minute placeholder, no tokens.
     ],
 )
-def test_price_applies_rate_and_minimum(bay_id, length_min, dollars):
-    """Wash bays charge max($3, $1/min); the vacuum charges $0.25/min."""
+def test_price_buys_whole_tokens_with_a_start_minimum(bay_id, length_min, dollars):
+    """A wash buys whole $1 one-minute tokens, 3 to start; the vacuum is $0.25/min."""
     assert analytics.price(bay_id, length_min * 60) == pytest.approx(dollars)
 
 

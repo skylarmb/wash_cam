@@ -1,0 +1,316 @@
+/* Visit labeling tab. Colors are role tokens; visits.js reads the lane ones. */
+.vl-root {
+  color-scheme: light;
+  --surface-1: #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --border: rgba(11, 11, 11, 0.1);
+  --focus: #2a78d6;
+  /* Ordered states, one sequential hue: empty < car < washing. */
+  --state-empty: #f0efec;
+  --state-car: #86b6ef;
+  --state-washing: #1c5cab;
+  --event: #0b0b0b;
+  --warning: #fab219;
+  --good: #0ca30c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .vl-root {
+    color-scheme: dark;
+    --surface-1: #1a1a19;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --border: rgba(255, 255, 255, 0.1);
+    --focus: #3987e5;
+    --state-empty: #2c2c2a;
+    --state-car: #256abf;
+    --state-washing: #86b6ef;
+    --event: #ffffff;
+  }
+
+  /* The shared layout is light-only, so darken it around this tab. */
+  :root:where(:not([data-theme="light"])) body:has(.vl-root) {
+    background: #0d0d0d;
+    color: #ffffff;
+  }
+  :root:where(:not([data-theme="light"])) body:has(.vl-root) nav a {
+    color: #c3c2b7;
+  }
+}
+
+:root[data-theme="dark"] .vl-root {
+  color-scheme: dark;
+  --surface-1: #1a1a19;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --border: rgba(255, 255, 255, 0.1);
+  --focus: #3987e5;
+  --state-empty: #2c2c2a;
+  --state-car: #256abf;
+  --state-washing: #86b6ef;
+  --event: #ffffff;
+}
+
+body:has(.vl-root) {
+  max-width: 1100px;
+  background: #f9f9f7;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.vl-root {
+  display: grid;
+  gap: 1rem;
+  padding-bottom: 2rem;
+  color: var(--text-primary);
+}
+
+.vl-root h2,
+.vl-root h3 {
+  margin: 0;
+}
+
+.vl-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 1rem;
+}
+
+.vl-task {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.vl-labeler {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface-1);
+}
+
+.vl-labeler[hidden] {
+  display: none;
+}
+
+/* The bay crop, enlarged; the page never shows the full frame. */
+.vl-stage canvas {
+  display: block;
+  height: min(62vh, 560px);
+  width: auto;
+  max-width: 100%;
+  border-radius: 0.5rem;
+  background: #000;
+  image-rendering: auto;
+}
+
+.vl-side {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.vl-status {
+  margin: 0;
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.vl-status strong {
+  font-size: 1.4rem;
+}
+
+.vl-events {
+  min-height: 1.6rem;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.vl-chip {
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: var(--state-washing);
+  color: var(--surface-1);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.vl-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.vl-root button {
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.vl-root button:focus-visible,
+.vl-lane:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.vl-root button[aria-pressed="true"] {
+  border-color: var(--state-washing);
+  background: var(--state-washing);
+  color: var(--surface-1);
+}
+
+.vl-finish {
+  justify-self: start;
+  font-weight: 600;
+}
+
+kbd {
+  padding: 0 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  font-family: inherit;
+  font-size: 0.8em;
+}
+
+.vl-problems {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.vl-problems:not(:empty)::before {
+  content: "⚠ ";
+  color: var(--warning);
+}
+
+.vl-help {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.vl-lane-wrap {
+  grid-column: 1 / -1;
+}
+
+.vl-lane {
+  display: block;
+  width: 100%;
+  height: 44px;
+  cursor: pointer;
+  border-radius: 0.4rem;
+}
+
+.vl-legend {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.35rem;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.vl-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 0.3rem;
+  border-radius: 2px;
+  vertical-align: -1px;
+}
+
+.vl-legend .car {
+  background: var(--state-car);
+}
+
+.vl-legend .washing {
+  background: var(--state-washing);
+}
+
+.vl-legend .event {
+  width: 2px;
+  background: var(--event);
+}
+
+.vl-picker {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.vl-new {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.vl-new label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--text-secondary);
+}
+
+.vl-new input {
+  width: auto;
+  padding: 0.35rem;
+}
+
+.vl-hint {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.vl-list {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.vl-list th,
+.vl-list td {
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+
+.vl-list th {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.vl-list tr[aria-current="true"] td {
+  font-weight: 600;
+}
+
+.vl-done {
+  color: var(--good);
+}
+
+@media (max-width: 720px) {
+  .vl-labeler {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vl-stage canvas {
+    height: auto;
+    width: 100%;
+  }
+
+  .vl-list th:nth-child(3),
+  .vl-list td:nth-child(3) {
+    display: none;
+  }
+}

@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlencode
 from werkzeug import serving
 
 from wash_cam.config import BAYS, DATABASE_PATH, IMAGES_DIR, bay_title
-from wash_cam.dashboard import analytics
+from wash_cam.dashboard import analytics, visits
 
 # Files under dashboard/static/ the server may send, with their content types.
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -19,6 +19,8 @@ STATIC_FILES = {
     "analytics.css": "text/css; charset=utf-8",
     "analytics.js": "text/javascript; charset=utf-8",
     "echarts.min.js": "text/javascript; charset=utf-8",
+    "visits.css": "text/css; charset=utf-8",
+    "visits.js": "text/javascript; charset=utf-8",
 }
 
 # The Analytics tab's markup; static/analytics.js fills it from /api/analytics.
@@ -55,7 +57,7 @@ ANALYTICS_PAGE = """<link rel="stylesheet" href="/static/analytics.css">
     <div id="busy-levels"></div>
   </section>
   <section class="panel" aria-labelledby="pace-title">
-    <h3 id="pace-title">Revenue pace</h3>
+    <h3 id="pace-title">Revenue pace (max possible)</h3>
     <p class="sub" id="pace-sub"></p>
     <div class="chart" id="pace-chart"></div>
   </section>
@@ -75,12 +77,12 @@ ANALYTICS_PAGE = """<link rel="stylesheet" href="/static/analytics.css">
   </section>
   <section class="panel" aria-labelledby="balance-title">
     <h3 id="balance-title">Bay balance</h3>
-    <p class="sub">Each wash bay's share of occupied time and of estimated revenue.
+    <p class="sub">Each wash bay's share of occupied time and of max possible revenue.
     Even use puts every bay on the dashed line.</p>
     <div class="chart" id="balance-chart"></div>
   </section>
   <section class="panel panel--wide" aria-labelledby="calendar-title">
-    <h3 id="calendar-title">Daily revenue</h3>
+    <h3 id="calendar-title">Daily revenue (max possible)</h3>
     <p class="sub">The last 13 weeks. Gray days had no captures.</p>
     <div class="chart chart--calendar" id="calendar-chart"></div>
   </section>
@@ -154,6 +156,7 @@ def page(content, tab="live"):
     tabs = [
         ("/", "live", "Live view"),
         ("/labeling", "labeling", "Data labeling"),
+        ("/visits", "visits", "Visit labeling"),
         ("/analytics", "analytics", "Analytics"),
     ]
     current = ' aria-current="page"'
@@ -332,8 +335,12 @@ document.querySelectorAll('a.image-step').forEach(link => {{
 
 def route(environ):
     """Handle page, image, and JSON requests."""
+    handled = visits.route(environ, DATABASE_PATH, IMAGES_DIR, page)
+    if handled is not None:
+        return handled
     path = environ.get("PATH_INFO", "/")
     method = environ.get("REQUEST_METHOD", "GET")
+    # Listing every capture is slow, so the visit routes above answer first.
     names = image_names()
     name = parse_qs(environ.get("QUERY_STRING", "")).get("image_path", [None])[0]
     if method == "POST" and path == "/api/labels":

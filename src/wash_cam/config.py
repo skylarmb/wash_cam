@@ -21,10 +21,12 @@ DATABASE_PATH = CHECKOUT_ROOT / "db" / "labels.sqlite3"
 # Each session's start and end are uncertain by up to one interval.
 CAPTURE_INTERVAL = 15.0
 
-# Prices for estimated revenue, in dollars. A wash-bay session earns
-# max(WASH_MINIMUM, WASH_RATE_PER_MIN * minutes), unrounded.
-WASH_RATE_PER_MIN = 1.00
-WASH_MINIMUM = 3.00
+# Wash bays are coin-op: cash buys tokens at a changer, and each token buys
+# TOKEN_MINUTES of meter time. A wash starts at WASH_START_TOKENS, and the
+# meter runs continuously, so a session buys whole tokens covering its time.
+TOKEN_PRICE = 1.00
+TOKEN_MINUTES = 1.0
+WASH_START_TOKENS = 3
 # Placeholder until Skylar confirms the vacuum price. No minimum.
 VACUUM_RATE_PER_MIN = 0.25
 

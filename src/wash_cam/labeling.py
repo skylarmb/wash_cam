@@ -1,7 +1,8 @@
 """Export capture batches for a labeling agent and import the labels it writes.
 
-Agent labels are the project's ground truth now that no human labels, so they
-must judge each image independently: the export never includes detections.
+Per-frame vehicle counts are labeled by agents, so the labels must judge each
+image independently: the export never includes detections. (Visit and washing
+labels are separate; see wash_cam.visit_labels.)
 Every imported row records who labeled it in `labeled_by`, which separates
 agent labels from any human labels, and human rows are never overwritten.
 See .agents/docs/labeling.md for the file formats.

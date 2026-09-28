@@ -6,7 +6,7 @@
 
 Panels, top to bottom:
 - A health line: last frame age, share of the range captured, and outages. The live strip shows each bay's open session if it saw the latest frames, with a locally ticking timer and estimate. Frames older than `MAX_GAP` mark it stale.
-- KPI tiles: estimated revenue, visits, median complete wash, share of covered time with all wash bays busy, and share of complete washes at or under the minimum-charge break-even (3 min).
+- KPI tiles: max possible revenue, visits, median complete wash, share of covered time with all wash bays busy, and share of complete washes that fit in the 3-token start (3 min).
 - The bay timeline: every session as a bar in its bay's lane, with outages hatched and a zoom that the busy-bays step chart follows.
 - The busy-bays chart: how many wash bays were occupied over time, plus a strip of covered time at 0 to all bays busy. "All bays busy" is the missed-business proxy until a queue region exists.
 - Revenue pace: the focus day's cumulative revenue (the range's last day) against the mean of up to 28 earlier days that are each at least half captured.
@@ -15,4 +15,4 @@ Panels, top to bottom:
 - Bay balance: each wash bay's share of occupied time and of revenue, against an even split.
 - Daily revenue: a 13-week calendar ending at the range's end, whatever the range. Uncaptured days are gray.
 
-Revenue is estimated from complete (`left`) sessions only, attributed to their local start day. `price` charges wash bays `max(WASH_MINIMUM, WASH_RATE_PER_MIN × minutes)` ($3 minimum, $1/min, unrounded) and the vacuum `VACUUM_RATE_PER_MIN × minutes` ($0.25/min, a placeholder). Occupied time is an upper bound on paid time. The site is coin-op, so no sales records exist or ever will, and every revenue figure is labeled an estimate. Colors are role tokens in `analytics.css`, with light and dark steps from the dataviz reference palette.
+Revenue is the maximum possible, from complete (`left`) sessions only, attributed to their local start day. The wash bays are coin-op: $1 buys a token and a token buys one minute (`TOKEN_PRICE`, `TOKEN_MINUTES`), and a wash starts at 3 tokens (`WASH_START_TOKENS`). So `price` charges a wash `max(3, ceil(minutes))` tokens for all of its bay time. The vacuum is `VACUUM_RATE_PER_MIN × minutes` ($0.25/min, a placeholder). Cars can sit without the meter running, so the page labels every revenue figure "max possible" or "up to". No sales records exist or ever will. A best estimate from detected washing time is planned (see `plan.md`). Colors are role tokens in `analytics.css`, with light and dark steps from the dataviz reference palette.
