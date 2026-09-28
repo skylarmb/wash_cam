@@ -174,14 +174,17 @@ agents which migration number you take before you write it.
 
 ### Step 6: Analytics dashboard
 
-- [ ] Add an Analytics tab to the dashboard with:
+- [x] Add an Analytics tab to the dashboard with:
   - a busy-hours heatmap of sessions by weekday and hour
   - utilization per bay (share of time occupied)
   - a distribution of wash durations
   - estimated revenue by day and by hour
+- [x] Rebuild the tab as a live page over a JSON API (2026-09-27): live bay
+  strip, visit timeline, bays busy at once, revenue pace, visit-length
+  beeswarm, typical-day profile, bay balance, and a daily revenue calendar.
 - [ ] Estimate missed business: find times when every wash bay was full and
   cars were waiting or left. This needs a queue region for the foreground,
-  defined like `BAYS`.
+  defined like `BAYS`. Until then, "all bays busy" time is the proxy.
 
 ### Step 7: Operations (alongside the other steps)
 

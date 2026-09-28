@@ -17,7 +17,7 @@ from pathlib import Path
 import cv2
 
 from wash_cam.bays import draw_bays
-from wash_cam.config import BAYS, CHECKOUT_ROOT, DATABASE_PATH, IMAGES_DIR
+from wash_cam.config import BAYS, CHECKOUT_ROOT, DATABASE_PATH, IMAGES_DIR, bay_kind
 
 __all__ = ["ImportResult", "LabelingError", "export_batch", "import_labels"]
 
@@ -107,7 +107,7 @@ def export_batch(
         "count_rule": COUNT_RULE,
         "bays": {
             bay_id: {
-                "kind": "vacuum" if bay_id.startswith("vac_") else "wash",
+                "kind": bay_kind(bay_id),
                 "quad": [list(point) for point in quad],
             }
             for bay_id, quad in BAYS.items()

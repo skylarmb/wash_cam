@@ -6,7 +6,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from wash_cam.config import BAYS, CHECKOUT_ROOT, IMAGES_DIR
+from wash_cam.config import BAYS, CHECKOUT_ROOT, IMAGES_DIR, bay_kind
 
 __all__ = ["assign_to_bay", "draw_bays", "run"]
 
@@ -42,7 +42,7 @@ def draw_bays(image: np.ndarray) -> np.ndarray:
     """Return a copy of a cropped capture with each bay outlined and labeled by ID."""
     overlay = image.copy()
     for bay_id, polygon in BAYS.items():
-        color = VACUUM_COLOR if bay_id.startswith("vac_") else WASH_COLOR
+        color = VACUUM_COLOR if bay_kind(bay_id) == "vacuum" else WASH_COLOR
         points = np.array(polygon, dtype=np.int32)
         cv2.polylines(overlay, [points], True, color, OUTLINE_THICKNESS)
         # Label just inside the top-left corner so it stays within the bay.
