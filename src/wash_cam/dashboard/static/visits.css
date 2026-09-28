@@ -172,8 +172,40 @@ body:has(.vl-root) {
 }
 
 .vl-finish {
-  justify-self: start;
   font-weight: 600;
+}
+
+/* The way back into an unfinished task, shown while none is open. */
+.vl-root .vl-resume {
+  border-color: var(--state-washing);
+  background: var(--state-washing);
+  color: var(--surface-1);
+  font-weight: 600;
+}
+
+.vl-resume[hidden] {
+  display: none;
+}
+
+/* Whether every change has reached the server. */
+.vl-save {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.vl-save[data-state="saved"]::before {
+  content: "✓ ";
+  color: var(--good);
+}
+
+.vl-save[data-state="failed"] {
+  color: var(--text-primary);
+}
+
+.vl-save[data-state="failed"]::before {
+  content: "⚠ ";
+  color: var(--warning);
 }
 
 kbd {
