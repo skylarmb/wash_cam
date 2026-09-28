@@ -165,6 +165,45 @@ def test_grab_frame_without_warmup_or_settling_keeps_the_first_frame(monkeypatch
     assert frame[0, 0, 0] == 1
 
 
+def test_night_frames_are_averaged_and_shadow_lifted(monkeypatch):
+    """A settled night frame becomes an average with lifted shadows."""
+    # Warm-up, four steady frames at 20 (night), then frames alternating
+    # around 20 so only their average is exactly 20.
+    frames = flat_frames(1, 1, 1, 1, 20, 20, 20, 20, *([18, 22] * 8))
+    fake_capture = SequenceVideoCapture(frames)
+    monkeypatch.setattr(cv2, "VideoCapture", lambda index: fake_capture)
+    monkeypatch.setattr(capture, "CAMERA_SETTLE_MAX_S", 60.0)
+    monkeypatch.setattr(capture, "NIGHT_AVERAGE_FRAMES", 16)
+
+    frame = capture.grab_frame(enhance_night=True)
+
+    # 15 extra frames after the settled one: 7 x (18 + 22) + 18 = 298, plus 20.
+    average = (20 + 7 * (18 + 22) + 18) / 16
+    assert fake_capture.reads == 4 + 4 + 15
+    assert frame.dtype == np.uint8
+    assert frame[0, 0, 0] == round(255 * (average / 255) ** capture.NIGHT_SHADOW_GAMMA)
+
+
+@pytest.mark.parametrize(
+    ("level", "enhance"),
+    [
+        (100, True),  # Daylight is saved as captured.
+        (2, True),  # Still too dark after the cap: kept, so it reads as unusable.
+        (20, False),  # Calibration wants raw frames, night or not.
+    ],
+)
+def test_other_frames_are_not_enhanced(monkeypatch, level, enhance):
+    """Only usable night frames of a capture are averaged and lifted."""
+    fake_capture = SequenceVideoCapture(flat_frames(level))
+    monkeypatch.setattr(cv2, "VideoCapture", lambda index: fake_capture)
+    monkeypatch.setattr(capture, "CAMERA_WARMUP_FRAMES", 0)
+
+    frame = capture.grab_frame(enhance_night=enhance)
+
+    assert fake_capture.reads == 1
+    assert frame[0, 0, 0] == level
+
+
 def test_take_picture_saves_cropped_frame(monkeypatch, tmp_path):
     """Save the frame cropped to CAMERA_CROP_BOX and return its filename."""
     fake_capture = FakeVideoCapture(opened=True, read_ok=True, frame=fake_frame())

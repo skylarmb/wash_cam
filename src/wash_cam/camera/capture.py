@@ -16,6 +16,9 @@ from wash_cam.config import (
     CAMERA_UNDEREXPOSED,
     CAMERA_WARMUP_FRAMES,
     IMAGES_DIR,
+    NIGHT_AVERAGE_FRAMES,
+    NIGHT_BRIGHTNESS,
+    NIGHT_SHADOW_GAMMA,
     load_calibration,
 )
 
@@ -56,13 +59,23 @@ def exposure_settled(recent: deque) -> bool:
     return in_range and abs(last - first) <= CAMERA_SETTLE_TOLERANCE * max(first, 1.0)
 
 
-def grab_frame(camera_index: int = 0):
-    """Capture one raw, unaligned frame from the webcam once exposure settles.
+def lift_shadows(image: np.ndarray) -> np.ndarray:
+    """Brighten dark tones of a float image (0-255) and round it to 8 bits."""
+    lifted = 255.0 * (np.clip(image, 0, 255) / 255.0) ** NIGHT_SHADOW_GAMMA
+    return np.round(lifted).astype(np.uint8)
+
+
+def grab_frame(camera_index: int = 0, enhance_night: bool = False):
+    """Capture one unaligned frame from the webcam once exposure settles.
 
     Discards CAMERA_WARMUP_FRAMES frames, then keeps reading until brightness
     stops changing (see CAMERA_SETTLE_* in config.py) and returns the last
     frame. After CAMERA_SETTLE_MAX_S it returns the latest frame anyway, so a
     scene that is truly dark still gets captured.
+
+    With enhance_night, a settled frame dimmer than NIGHT_BRIGHTNESS is
+    replaced by an average of NIGHT_AVERAGE_FRAMES frames with lifted shadows
+    (see config.py). Calibration leaves it off to match raw frames.
 
     Raises RuntimeError if the camera cannot be opened or a frame cannot be read.
     """
@@ -85,6 +98,20 @@ def grab_frame(camera_index: int = 0):
             recent.append(brightness(frame))
             if exposure_settled(recent) or time.monotonic() >= deadline:
                 break
+        level = recent[-1] if read_ok else 0.0
+        if (
+            enhance_night
+            and read_ok
+            and CAMERA_UNDEREXPOSED <= level < NIGHT_BRIGHTNESS
+        ):
+            total = frame.astype(np.float32)
+            for _ in range(NIGHT_AVERAGE_FRAMES - 1):
+                read_ok, extra = capture.read()
+                if not read_ok:
+                    break
+                total += extra
+            if read_ok:
+                frame = lift_shadows(total / NIGHT_AVERAGE_FRAMES)
     finally:
         capture.release()
 
@@ -120,7 +147,7 @@ def take_picture(camera_index: int = 0) -> str:
     Raises RuntimeError if the camera cannot be opened or a frame cannot be read,
     and ValueError if CAMERA_CROP_BOX does not fit inside the aligned frame.
     """
-    frame = align_frame(grab_frame(camera_index))
+    frame = align_frame(grab_frame(camera_index, enhance_night=True))
     cropped_frame = crop_to_box(frame, CAMERA_CROP_BOX)
 
     IMAGES_DIR.mkdir(parents=True, exist_ok=True)
