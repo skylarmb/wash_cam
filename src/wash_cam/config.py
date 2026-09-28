@@ -114,6 +114,19 @@ CAMERA_UNDEREXPOSED = 8.0
 CAMERA_OVEREXPOSED = 245.0
 CAMERA_SETTLE_MAX_S = 6.0
 
+# Night captures: a settled frame dimmer than NIGHT_BRIGHTNESS (lit nights
+# settle near 30, daytime above 60) is replaced by the average of
+# NIGHT_AVERAGE_FRAMES frames with its shadows lifted by NIGHT_SHADOW_GAMMA
+# (output = 255 * (input / 255) ** gamma), computed before 8-bit rounding.
+# Averaging cuts sensor noise, so the lift reveals detail instead of noise:
+# unlit bay 0 averages about 5 at night, where a lifted single frame was
+# blocky colour noise and a lifted 16-frame average was readable. Frames still
+# too dark to settle (below CAMERA_UNDEREXPOSED) are kept as they are, so they
+# stay detectably unusable. Costs about 0.7 s per night capture.
+NIGHT_BRIGHTNESS = 40.0
+NIGHT_AVERAGE_FRAMES = 16
+NIGHT_SHADOW_GAMMA = 0.5
+
 # A stored capture whose mean brightness (0-255) is below this shows nothing
 # usable: sessions and analytics treat it as an outage rather than empty bays,
 # and the heartbeat reports a run of them.
