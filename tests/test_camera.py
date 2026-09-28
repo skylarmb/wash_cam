@@ -34,6 +34,16 @@ def uncalibrated(monkeypatch):
     monkeypatch.setattr(capture, "load_calibration", lambda: None)
 
 
+@pytest.fixture(autouse=True)
+def no_settling(monkeypatch):
+    """Keep the first frame after warm-up unless a test is about settling.
+
+    Test frames are flat and often black, which never counts as settled, so
+    each capture would otherwise wait the full settle cap.
+    """
+    monkeypatch.setattr(capture, "CAMERA_SETTLE_MAX_S", 0.0)
+
+
 def fake_frame():
     """Build a frame large enough to contain the crop box."""
     _, _, right, bottom = CAMERA_CROP_BOX
@@ -88,30 +98,66 @@ class SequenceVideoCapture:
         pass
 
 
-def test_grab_frame_discards_warmup_frames(monkeypatch):
-    """Let auto-exposure settle by discarding frames before the one kept.
+def flat_frames(*values):
+    """Frames of one flat brightness each, so a returned frame identifies itself."""
+    return [np.full((16, 16, 3), value, dtype=np.uint8) for value in values]
 
-    A cold camera needs streaming time before its exposure converges, so the
-    first frames after opening can be unusable.
+
+def test_grab_frame_keeps_reading_until_exposure_settles(monkeypatch):
+    """Discard the warm-up, then wait for brightness to stop changing.
+
+    A camera leaving daylight exposure at dusk ramps up slowly, so a fixed
+    handful of frames can stay near-black; the kept frame is the first one
+    after brightness holds steady within range.
     """
-    # Each frame is a distinct flat value, so the returned one identifies itself.
-    frames = [np.full((10, 10, 3), value, dtype=np.uint8) for value in (1, 2, 3, 4, 5)]
+    # Four warm-up frames, then a ramp from near-black that levels off at 30.
+    frames = flat_frames(1, 1, 1, 1, 2, 5, 20, 30, 30, 30, 30, 31)
     fake_capture = SequenceVideoCapture(frames)
     monkeypatch.setattr(cv2, "VideoCapture", lambda index: fake_capture)
     monkeypatch.setattr(capture, "CAMERA_WARMUP_FRAMES", 4)
+    monkeypatch.setattr(capture, "CAMERA_SETTLE_MAX_S", 60.0)
 
     frame = capture.grab_frame()
 
-    assert fake_capture.reads == 5
-    assert frame[0, 0, 0] == 5
+    # Settled once the last three changes left brightness at 30.
+    assert fake_capture.reads == 11
+    assert frame[0, 0, 0] == 30
 
 
-def test_grab_frame_without_warmup_keeps_the_first_frame(monkeypatch):
-    """Read exactly one frame when warm-up is disabled."""
-    frames = [np.full((10, 10, 3), value, dtype=np.uint8) for value in (1, 2)]
+def test_grab_frame_never_settles_on_a_near_black_frame(monkeypatch):
+    """A steady but near-black frame is still converging, not settled."""
+    frames = flat_frames(1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 40, 40, 40, 40)
     fake_capture = SequenceVideoCapture(frames)
     monkeypatch.setattr(cv2, "VideoCapture", lambda index: fake_capture)
+    monkeypatch.setattr(capture, "CAMERA_SETTLE_MAX_S", 60.0)
+
+    frame = capture.grab_frame()
+
+    assert frame[0, 0, 0] == 40
+
+
+def test_grab_frame_gives_up_after_the_time_cap(monkeypatch):
+    """A scene that is truly dark is captured anyway once the cap passes."""
+    fake_capture = SequenceVideoCapture(flat_frames(1, 1, 1, 1, 2, 3, 4, 5, 6))
+    monkeypatch.setattr(cv2, "VideoCapture", lambda index: fake_capture)
+    monkeypatch.setattr(capture, "CAMERA_SETTLE_MAX_S", 3.0)
+    # Each clock reading is one second later than the last.
+    clock = iter(range(100))
+    monkeypatch.setattr(capture.time, "monotonic", lambda: next(clock))
+
+    frame = capture.grab_frame()
+
+    # The deadline is read at 0 s (so it is 3 s), then checked at 1, 2, 3 s.
+    assert fake_capture.reads == 4 + 3
+    assert frame[0, 0, 0] == 4
+
+
+def test_grab_frame_without_warmup_or_settling_keeps_the_first_frame(monkeypatch):
+    """Read exactly one frame when warm-up and settling are disabled."""
+    fake_capture = SequenceVideoCapture(flat_frames(1, 2))
+    monkeypatch.setattr(cv2, "VideoCapture", lambda index: fake_capture)
     monkeypatch.setattr(capture, "CAMERA_WARMUP_FRAMES", 0)
+    monkeypatch.setattr(capture, "CAMERA_SETTLE_MAX_S", 0.0)
 
     frame = capture.grab_frame()
 

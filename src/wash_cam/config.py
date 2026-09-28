@@ -98,6 +98,27 @@ NIGHT_DARK_FRACTION = 0.38
 # makes no difference once the camera is warm.
 CAMERA_WARMUP_FRAMES = 4
 
+# After the warm-up, capture keeps reading until auto-exposure settles: the
+# mean brightness (0-255) of the last CAMERA_SETTLE_WINDOW frames changes by
+# no more than CAMERA_SETTLE_TOLERANCE of itself, and sits between
+# CAMERA_UNDEREXPOSED and CAMERA_OVEREXPOSED. The camera keeps its exposure
+# between captures, but a few frames cannot follow a big change: at dusk on
+# 2026-09-27 captures stayed near-black (mean 1.4) for four hours while the lot
+# was lit, and 60 frames of streaming brought the same scene up to 24. Lit
+# nights settle near 30, so a darker frame is still converging. Steady light
+# settles in a few frames; CAMERA_SETTLE_MAX_S caps the wait for a scene that
+# is truly dark.
+CAMERA_SETTLE_WINDOW = 3
+CAMERA_SETTLE_TOLERANCE = 0.03
+CAMERA_UNDEREXPOSED = 8.0
+CAMERA_OVEREXPOSED = 245.0
+CAMERA_SETTLE_MAX_S = 6.0
+
+# A stored capture whose mean brightness (0-255) is below this shows nothing
+# usable: sessions and analytics treat it as an outage rather than empty bays,
+# and the heartbeat reports a run of them.
+UNUSABLE_BRIGHTNESS = 8.0
+
 
 @dataclass(frozen=True)
 class Config:

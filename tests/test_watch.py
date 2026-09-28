@@ -178,3 +178,42 @@ def test_partial_and_unreadable_files_are_skipped(setup):
     watch.process_new_images(FakeDetector(), images, database)
 
     assert set(detection_rows(database)) == {"a.jpg"}
+
+
+def brightness_of(database, image_path):
+    """Return the stored brightness of one capture."""
+    with closing(sqlite3.connect(database)) as connection:
+        return connection.execute(
+            "SELECT brightness FROM image_detections WHERE image_path = ?",
+            (image_path,),
+        ).fetchone()[0]
+
+
+def test_detections_record_capture_brightness(setup):
+    """Each stored detection carries its capture's mean brightness."""
+    images, database = setup
+    cv2.imwrite(str(images / "lit.jpg"), np.full((34, 127, 3), 30, dtype=np.uint8))
+
+    watch.process_new_images(FakeDetector(), images, database)
+
+    assert brightness_of(database, "lit.jpg") == pytest.approx(30, abs=1)
+
+
+def test_backfill_measures_brightness_for_older_detections(setup):
+    """Detections stored before brightness existed get it measured."""
+    images, database = setup
+    write_capture(images, "old.jpg")
+    watch.process_new_images(FakeDetector(), images, database)
+    with closing(sqlite3.connect(database)) as connection, connection:
+        connection.execute("UPDATE image_detections SET brightness = NULL")
+        connection.execute(
+            "INSERT INTO image_detections (image_path, metadata, model) "
+            "VALUES ('gone.jpg', '{}', 'fake')"
+        )
+
+    measured = watch.backfill_brightness(images, database)
+
+    # The deleted capture stays unmeasured.
+    assert measured == 1
+    assert brightness_of(database, "old.jpg") == 0.0
+    assert brightness_of(database, "gone.jpg") is None

@@ -15,9 +15,16 @@ from wash_cam.bays import assign_to_bay
 from wash_cam.config import DATABASE_PATH, IMAGES_DIR
 from wash_cam.db import migrate
 from wash_cam.detect import Detection, VehicleDetector, count_vehicles, vehicles
-from wash_cam.sessions import format_time, update_sessions
+from wash_cam.sessions import format_time, rebuild_sessions, update_sessions
 
-__all__ = ["backfill_capture_times", "capture_time", "process_new_images", "run"]
+__all__ = [
+    "backfill_brightness",
+    "backfill_capture_times",
+    "capture_time",
+    "image_brightness",
+    "process_new_images",
+    "run",
+]
 
 # Capture filenames are local time: see take_picture().
 FILENAME_TIME_FORMAT = "%Y%m%d_%H%M%S_%f"
@@ -85,6 +92,34 @@ def backfill_capture_times(images: Path, database: Path) -> int:
     return len(filled)
 
 
+def image_brightness(image: np.ndarray) -> float:
+    """Mean brightness (0-255) of a stored capture, rounded for storage."""
+    return round(float(image.mean()), 2)
+
+
+def backfill_brightness(images: Path, database: Path) -> int:
+    """Measure brightness for detections stored before it was recorded."""
+    with closing(sqlite3.connect(f"{database.as_uri()}?mode=rw", uri=True)) as db:
+        missing = [
+            name
+            for (name,) in db.execute(
+                "SELECT image_path FROM image_detections WHERE brightness IS NULL"
+            )
+        ]
+        measured: list[tuple[float, str]] = []
+        for name in missing:
+            # Captures deleted from disk, or unreadable ones, stay null.
+            image = cv2.imread(str(images / name))
+            if image is not None:
+                measured.append((image_brightness(image), name))
+        with db:
+            db.executemany(
+                "UPDATE image_detections SET brightness = ? WHERE image_path = ?",
+                measured,
+            )
+    return len(measured)
+
+
 def process_new_images(
     detector: Detector,
     images: Path,
@@ -136,8 +171,15 @@ def process_new_images(
             with db:
                 db.execute(
                     "INSERT OR IGNORE INTO image_detections "
-                    "(image_path, metadata, model, captured_at) VALUES (?, ?, ?, ?)",
-                    (path.name, json.dumps(metadata), detector.name, stored_time(path)),
+                    "(image_path, metadata, model, captured_at, brightness) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (
+                        path.name,
+                        json.dumps(metadata),
+                        detector.name,
+                        stored_time(path),
+                        image_brightness(image),
+                    ),
                 )
             stored += 1
     return stored
@@ -152,6 +194,11 @@ def run() -> None:
     filled = backfill_capture_times(IMAGES_DIR, DATABASE_PATH)
     if filled:
         print(f"Filled capture times for {filled} detections", flush=True)
+    measured = backfill_brightness(IMAGES_DIR, DATABASE_PATH)
+    if measured:
+        # Frames now known to be unusable change sessions, so rebuild them.
+        print(f"Measured brightness for {measured} detections", flush=True)
+        rebuild_sessions(DATABASE_PATH)
     unreadable: set[str] = set()
     # Update sessions on the first pass too, so a restart after a migration or
     # backfill brings them up to date before any new capture arrives.

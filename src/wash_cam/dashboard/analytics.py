@@ -24,6 +24,7 @@ from wash_cam.config import (
     CAPTURE_INTERVAL,
     TOKEN_MINUTES,
     TOKEN_PRICE,
+    UNUSABLE_BRIGHTNESS,
     VACUUM_RATE_PER_MIN,
     WASH_START_TOKENS,
     bay_kind,
@@ -137,7 +138,8 @@ def load_runs(db: sqlite3.Connection, start: datetime, end: datetime) -> list[Ru
 
     SQLite finds the frames that open or close a run, so a 90-day range reads a
     few hundred boundary rows rather than half a million capture times. A lone
-    frame covers no measurable time and is dropped.
+    frame covers no measurable time and is dropped. Frames too dark to see are
+    left out, so a run of them is an outage rather than empty bays.
     """
     # julianday arithmetic carries float error well under a millisecond, so a
     # gap of exactly MAX_GAP still joins its neighbors, as sessions do.
@@ -149,12 +151,18 @@ def load_runs(db: sqlite3.Connection, start: datetime, end: datetime) -> list[Ru
         "FROM (SELECT captured_at, "
         "  lag(captured_at) OVER (ORDER BY captured_at) AS prev, "
         "  lead(captured_at) OVER (ORDER BY captured_at) AS next "
-        "  FROM image_detections WHERE captured_at >= :start AND captured_at < :end) "
+        "  FROM image_detections WHERE captured_at >= :start AND captured_at < :end "
+        "  AND (brightness IS NULL OR brightness >= :dark)) "
         "WHERE prev IS NULL OR next IS NULL "
         "  OR (julianday(captured_at) - julianday(prev)) * 86400 > :limit "
         "  OR (julianday(next) - julianday(captured_at)) * 86400 > :limit "
         "ORDER BY captured_at",
-        {"start": format_time(start), "end": format_time(end), "limit": limit},
+        {
+            "start": format_time(start),
+            "end": format_time(end),
+            "limit": limit,
+            "dark": UNUSABLE_BRIGHTNESS,
+        },
     ).fetchall()
     runs: list[Run] = []
     run_start: datetime | None = None
@@ -411,9 +419,14 @@ def daily_coverage(runs: Sequence[Run]) -> dict[date, float]:
 
 def live_state(db: sqlite3.Connection, now: datetime) -> dict[str, object]:
     """What each bay looks like right now, from the latest open sessions."""
-    (latest,) = db.execute("SELECT max(captured_at) FROM image_detections").fetchone()
-    last_frame = parse_time(latest) if latest else None
-    stale = last_frame is None or now - last_frame > MAX_GAP
+    row = db.execute(
+        "SELECT captured_at, brightness FROM image_detections "
+        "ORDER BY captured_at DESC LIMIT 1"
+    ).fetchone()
+    last_frame = parse_time(row[0]) if row and row[0] else None
+    # A frame too dark to see can't show who is in a bay.
+    dark = bool(row) and row[1] is not None and row[1] < UNUSABLE_BRIGHTNESS
+    stale = last_frame is None or now - last_frame > MAX_GAP or dark
     opened: dict[str, datetime] = {}
     if last_frame is not None and not stale:
         for bay_id, started, last_seen in db.execute(
@@ -439,6 +452,7 @@ def live_state(db: sqlite3.Connection, now: datetime) -> dict[str, object]:
     return {
         "last_frame": millis(last_frame) if last_frame else None,
         "stale": stale,
+        "dark": dark,
         "bays": bays,
     }
 

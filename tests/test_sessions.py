@@ -149,3 +149,19 @@ def test_update_extends_stored_sessions_like_a_full_rebuild(database):
 
     assert incremental == stored_sessions(database)
     assert [row[-1] for row in incremental] == ["left", "left", "open"]
+
+
+def test_frames_too_dark_to_see_are_an_outage_not_an_empty_bay(database):
+    """A car still there when frames go dark ends as a gap, not a departure."""
+    insert_frames(database, [0, 1, 1, 1, 0, 0, 0, 0, 0, 0])
+    # Frames 4-7 are near-black: the detector saw nothing, but nothing was seen.
+    with closing(sqlite3.connect(database)) as connection, connection:
+        connection.execute(
+            "UPDATE image_detections SET brightness = CASE "
+            "WHEN image_path IN ('4.jpg', '5.jpg', '6.jpg', '7.jpg') THEN 1.4 "
+            "ELSE 30 END"
+        )
+
+    sessions.rebuild_sessions(database, INTERVAL)
+
+    assert [row[-1] for row in stored_sessions(database)] == ["gap"]

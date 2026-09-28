@@ -1,5 +1,7 @@
 """Capture still images from a webcam."""
 
+import time
+from collections import deque
 from datetime import datetime
 
 import cv2
@@ -7,6 +9,11 @@ import numpy as np
 
 from wash_cam.config import (
     CAMERA_CROP_BOX,
+    CAMERA_OVEREXPOSED,
+    CAMERA_SETTLE_MAX_S,
+    CAMERA_SETTLE_TOLERANCE,
+    CAMERA_SETTLE_WINDOW,
+    CAMERA_UNDEREXPOSED,
     CAMERA_WARMUP_FRAMES,
     IMAGES_DIR,
     load_calibration,
@@ -35,12 +42,27 @@ def crop_to_box(frame, crop_box: tuple[int, int, int, int]):
     return frame[top:bottom, left:right]
 
 
-def grab_frame(camera_index: int = 0):
-    """Capture one raw, unaligned frame from the webcam.
+def brightness(frame) -> float:
+    """Mean brightness (0-255) of a frame, sampled sparsely for speed."""
+    return float(frame[::8, ::8].mean())
 
-    Discards CAMERA_WARMUP_FRAMES frames first so auto-exposure has streaming
-    time to converge; a camera that just powered up otherwise returns frames
-    that are far too dark.
+
+def exposure_settled(recent: deque) -> bool:
+    """Whether recent frame brightnesses show auto-exposure has converged."""
+    if len(recent) <= CAMERA_SETTLE_WINDOW:
+        return False
+    first, last = recent[0], recent[-1]
+    in_range = CAMERA_UNDEREXPOSED <= last <= CAMERA_OVEREXPOSED
+    return in_range and abs(last - first) <= CAMERA_SETTLE_TOLERANCE * max(first, 1.0)
+
+
+def grab_frame(camera_index: int = 0):
+    """Capture one raw, unaligned frame from the webcam once exposure settles.
+
+    Discards CAMERA_WARMUP_FRAMES frames, then keeps reading until brightness
+    stops changing (see CAMERA_SETTLE_* in config.py) and returns the last
+    frame. After CAMERA_SETTLE_MAX_S it returns the latest frame anyway, so a
+    scene that is truly dark still gets captured.
 
     Raises RuntimeError if the camera cannot be opened or a frame cannot be read.
     """
@@ -52,7 +74,17 @@ def grab_frame(camera_index: int = 0):
     try:
         for _ in range(CAMERA_WARMUP_FRAMES):
             capture.read()
-        read_ok, frame = capture.read()
+        deadline = time.monotonic() + CAMERA_SETTLE_MAX_S
+        # Brightness of the newest frames; one more than the window, so the
+        # oldest entry is the baseline the newest is compared against.
+        recent: deque = deque(maxlen=CAMERA_SETTLE_WINDOW + 1)
+        while True:
+            read_ok, frame = capture.read()
+            if not read_ok:
+                break
+            recent.append(brightness(frame))
+            if exposure_settled(recent) or time.monotonic() >= deadline:
+                break
     finally:
         capture.release()
 

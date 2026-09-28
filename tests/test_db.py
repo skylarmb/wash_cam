@@ -36,7 +36,7 @@ def test_migrate_creates_a_new_database(tmp_path):
         "visit_windows",
         "visit_events",
     } <= tables(path)
-    assert user_version(path) == 5
+    assert user_version(path) == 6
 
 
 def test_migrate_upgrades_without_touching_existing_labels(tmp_path):
@@ -52,7 +52,7 @@ def test_migrate_upgrades_without_touching_existing_labels(tmp_path):
     db.migrate(path)
     db.migrate(path)
 
-    assert user_version(path) == 5
+    assert user_version(path) == 6
     with closing(sqlite3.connect(path)) as connection:
         assert connection.execute("SELECT count(*) FROM image_labels").fetchone() == (
             1,
