@@ -36,6 +36,8 @@
     heldKey: null,
     // A first Enter with problems arms finishing; a second one finishes.
     finishArmed: false,
+    // Saves still in flight, so the page can say whether all work is stored.
+    pendingSaves: 0,
     derived: { states: [], problems: [] },
   };
 
@@ -107,6 +109,49 @@
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || response.statusText);
     return payload;
+  }
+
+  // The frame each task was left on, per browser. Storage can be missing or
+  // blocked, so every access is guarded and the page works without it.
+  const POSITION_KEY = "washcam.visits.position.";
+
+  function rememberPosition() {
+    try {
+      localStorage.setItem(POSITION_KEY + state.detail.window.id, currentFrame().image_path);
+    } catch {
+      // No storage: resuming falls back to the last event.
+    }
+  }
+
+  function recalledPosition(detail) {
+    try {
+      const name = localStorage.getItem(POSITION_KEY + detail.window.id);
+      return detail.frames.findIndex((frame) => frame.image_path === name);
+    } catch {
+      return -1;
+    }
+  }
+
+  /** Show whether every change has reached the server. */
+  function setSaveState(saveState, message) {
+    const element = document.getElementById("save-state");
+    element.dataset.state = saveState;
+    element.textContent = message;
+  }
+
+  /** Run a save, tracking it so the indicator and page unload know about it. */
+  async function save(path, body) {
+    state.pendingSaves += 1;
+    setSaveState("saving", "Saving…");
+    try {
+      await api(path, body);
+      state.pendingSaves -= 1;
+      if (!state.pendingSaves) setSaveState("saved", "All changes saved");
+    } catch (error) {
+      state.pendingSaves -= 1;
+      setSaveState("failed", `Not saved: ${error.message}`);
+      throw error;
+    }
   }
 
   function editable() {
@@ -260,6 +305,7 @@
     state.finishArmed = false;
     preload(direction);
     render();
+    rememberPosition();
     return state.index > 0 && state.index < last;
   }
 
@@ -300,10 +346,6 @@
     state.derived = derive(state.detail.frames, state.events);
   }
 
-  function showError(message) {
-    document.getElementById("problems").textContent = `Not saved: ${message}`;
-  }
-
   /** Toggle an event on the current frame, saving it; undo locally on failure. */
   async function toggle(event) {
     if (!editable()) return;
@@ -317,18 +359,17 @@
     state.finishArmed = false;
     render();
     try {
-      await api("/api/visits/event", {
+      await save("/api/visits/event", {
         window_id: state.detail.window.id,
         image_path: frame.image_path,
         event,
         present,
       });
-    } catch (error) {
+    } catch {
       if (present) marked.delete(event);
       else marked.add(event);
       refreshDerived();
       render();
-      showError(error.message);
     }
   }
 
@@ -341,12 +382,11 @@
     refreshDerived();
     render();
     try {
-      await api("/api/visits/clear", { window_id: state.detail.window.id, image_path: frame.image_path });
-    } catch (error) {
+      await save("/api/visits/clear", { window_id: state.detail.window.id, image_path: frame.image_path });
+    } catch {
       state.events.set(frame.image_path, previous);
       refreshDerived();
       render();
-      showError(error.message);
     }
   }
 
@@ -362,9 +402,8 @@
       return;
     }
     try {
-      await api("/api/visits/complete", { window_id: state.detail.window.id, completed: true });
-    } catch (error) {
-      showError(error.message);
+      await save("/api/visits/complete", { window_id: state.detail.window.id, completed: true });
+    } catch {
       return;
     }
     const next = state.detail.next_id;
@@ -374,6 +413,14 @@
       document.getElementById("task").textContent = "All tasks are finished. Open a new range below.";
     }
     loadWindows();
+  }
+
+  /** Leave the labeler for the task list; everything is already saved. */
+  function pause() {
+    stopHold();
+    closeLabeler();
+    loadWindows();
+    document.getElementById("task").textContent = "Paused. Your labels are saved.";
   }
 
   // ---------- windows ----------
@@ -418,9 +465,12 @@
     const url = new URL(location.href);
     url.searchParams.set("window", id);
     history.replaceState(null, "", url);
-    // Resume where labeling stopped: just after the last event, if any.
+    document.getElementById("resume").hidden = true;
+    setSaveState("saved", "All changes saved");
+    // Resume on the frame this browser left off, else at the last event.
+    const remembered = recalledPosition(detail);
     const lastEvent = detail.frames.findLastIndex((frame) => state.events.get(frame.image_path)?.size);
-    seek(lastEvent >= 0 ? lastEvent : 0);
+    seek(remembered >= 0 ? remembered : Math.max(lastEvent, 0));
     markCurrentRow();
   }
 
@@ -430,6 +480,20 @@
     const url = new URL(location.href);
     url.searchParams.delete("window");
     history.replaceState(null, "", url);
+  }
+
+  /** Offer the first unfinished task you started, when no task is open. */
+  function showResumePrompt(windows) {
+    const button = document.getElementById("resume");
+    const started = windows
+      .filter((window) => !window.labeled_by && !window.completed && window.events)
+      .sort((a, b) => a.id - b.id)[0];
+    button.hidden = Boolean(state.detail) || !started;
+    if (!button.hidden) {
+      const events = `${started.events} event${started.events === 1 ? "" : "s"}`;
+      button.textContent = `Resume ${started.bay} · ${describeRange(started)} · ${events}`;
+      button.onclick = () => openWindow(started.id);
+    }
   }
 
   function markCurrentRow() {
@@ -446,6 +510,7 @@
       document.getElementById("picker-error").textContent = error.message;
       return;
     }
+    showResumePrompt(windows);
     const body = document.getElementById("windows");
     if (!windows.length) {
       const row = document.createElement("tr");
@@ -476,7 +541,7 @@
         const actions = document.createElement("td");
         const open = document.createElement("button");
         open.type = "button";
-        open.textContent = "Open";
+        open.textContent = !window.completed && window.events ? "Resume" : "Open";
         open.addEventListener("click", () => openWindow(window.id));
         actions.append(open);
         if (!window.labeled_by) {
@@ -532,6 +597,9 @@
     } else if (key === "[" || key === "]") {
       event.preventDefault();
       jumpToEvent(key === "]" ? 1 : -1);
+    } else if (key === "Escape" && !event.repeat) {
+      event.preventDefault();
+      pause();
     } else if (key === "Enter" && !event.repeat && !event.target.closest("button")) {
       event.preventDefault();
       finish();
@@ -556,6 +624,11 @@
   document.getElementById("prev-event").addEventListener("click", () => jumpToEvent(-1));
   document.getElementById("next-event").addEventListener("click", () => jumpToEvent(1));
   document.getElementById("finish").addEventListener("click", finish);
+  document.getElementById("pause").addEventListener("click", pause);
+  // Only warn on leaving while a save is still in flight; otherwise all is stored.
+  window.addEventListener("beforeunload", (event) => {
+    if (state.pendingSaves) event.preventDefault();
+  });
 
   // Click or drag the lane to seek.
   function seekFromLane(event) {

@@ -486,6 +486,10 @@ def test_visit_labeling_tab_is_a_nav_tab(request_dashboard):
     assert status == "200 OK"
     assert b'<a href="/visits" aria-current="page">Visit labeling</a>' in body
     assert b'<script src="/static/visits.js">' in body
+    # Labels save as they are marked, so the page offers pause and resume.
+    assert b'id="pause"' in body
+    assert b'id="resume"' in body
+    assert b'id="save-state"' in body
 
 
 def test_visit_labeling_round_trip(request_dashboard, tmp_path):

@@ -24,6 +24,7 @@ PAGE = """<link rel="stylesheet" href="/static/visits.css">
 <header class="vl-head">
   <h2>Visit labeling</h2>
   <p class="vl-task" id="task" aria-live="polite"></p>
+  <button type="button" class="vl-resume" id="resume" hidden></button>
 </header>
 <section class="vl-labeler" id="labeler" hidden aria-label="Label one bay">
   <div class="vl-stage">
@@ -31,6 +32,7 @@ PAGE = """<link rel="stylesheet" href="/static/visits.css">
   </div>
   <div class="vl-side">
     <p class="vl-status" id="status" role="status"></p>
+    <p class="vl-save" id="save-state" aria-live="polite" data-state="saved">All changes saved</p>
     <p class="vl-events" id="frame-events"></p>
     <div class="vl-buttons" role="group" aria-label="Mark an event on this frame">
       <button type="button" data-event="arrive"><kbd>A</kbd> Arrive</button>
@@ -45,7 +47,10 @@ PAGE = """<link rel="stylesheet" href="/static/visits.css">
       <button type="button" id="prev-event"><kbd>[</kbd> Prev event</button>
       <button type="button" id="next-event"><kbd>]</kbd> Next event</button>
     </div>
-    <button type="button" class="vl-finish" id="finish"><kbd>Enter</kbd> Finish bay, next task</button>
+    <div class="vl-buttons">
+      <button type="button" class="vl-finish" id="finish"><kbd>Enter</kbd> Finish bay, next task</button>
+      <button type="button" id="pause"><kbd>Esc</kbd> Pause (saved)</button>
+    </div>
     <p class="vl-problems" id="problems" role="alert"></p>
     <details class="vl-help">
       <summary>Keys and rubric</summary>
@@ -53,7 +58,8 @@ PAGE = """<link rel="stylesheet" href="/static/visits.css">
       to play faster. <kbd>[</kbd>/<kbd>]</kbd> jump between events. <kbd>A</kbd>,
       <kbd>W</kbd>, <kbd>S</kbd>, <kbd>L</kbd> toggle an event on this frame;
       <kbd>⌫</kbd> clears the frame. Click or drag the strip below to seek.
-      Every change saves immediately.</p>
+      Every change saves immediately, so you can pause (<kbd>Esc</kbd>) or close
+      the tab at any time and resume where you stopped.</p>
       <p id="rubric"></p>
     </details>
   </div>
