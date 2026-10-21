@@ -1,6 +1,6 @@
 # Wash Cam
 
-Wash Cam is a program that takes periodic photos of a car wash and analyzes them to determine:
+Wash Cam is a **100% vibe-coded project** that takes periodic photos of a car wash and analyzes them to determine:
 - how many cars go through the wash per day
 - how much time is spent in the wash per car
 
